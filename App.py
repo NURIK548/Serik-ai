@@ -8,155 +8,199 @@ import io
 import random
 from requests.utils import quote
 
-Беттің баптаулары
-
+# ======================
+# БАПТАУЛАР
+# ======================
 st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
-wikipedia.set_lang("ru") # Орысша іздеу
+wikipedia.set_lang("ru")
 
-Дизайн (қара фон, ақ жазу)
-
+# ======================
+# ДИЗАЙН
+# ======================
 st.markdown("""
 <style>
-.stApp { background-color: #0e1117; color: white; }
-.stMarkdown, p, h1, h2, h3, span, label { color: white !important; }
-.stChatInput textarea { background-color: #1a1f2c !important; color: white !important; border: 1px solid #3a3f50 !important; }
+.stApp {
+    background-color: #0e1117;
+    color: white;
+}
+.stMarkdown, p, h1, h2, h3, span, label {
+    color: white !important;
+}
+.stChatInput textarea {
+    background-color: #1a1f2c !important;
+    color: white !important;
+    border: 1px solid #3a3f50 !important;
+}
 .photo-box {
-width: 100%;
-max-width: 750px;
-border-radius: 12px;
-border: 2px solid #3a3f50;
-overflow: hidden;
-margin: 15px 0;
+    width: 100%;
+    max-width: 750px;
+    border-radius: 12px;
+    border: 2px solid #3a3f50;
+    overflow: hidden;
+    margin: 15px 0;
 }
 </style>
 """, unsafe_allow_html=True)
 
-Дауыс шығару HTML-ы
+# ======================
+# ДАУЫС (TTS)
+# ======================
+def get_audio(text):
+    try:
+        clean_txt = text[:200]
+        tts = gTTS(text=clean_txt, lang='ru')
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        return fp
+    except:
+        return None
 
-def get_audio_html(text):
-try:
-clean_txt = re.sub(r'[^\w\sа-яА-ЯёЁ]', '', text)[:200]
-tts = gTTS(text=clean_txt, lang='ru')
-fp = io.BytesIO()
-tts.write_to_fp(fp)
-fp.seek(0)
-audio_b64 = base64.b64encode(fp.read()).decode()
-return f'<audio autoplay="true" src="data:audio/mp3;base64,{audio_b64}">'
-except: return ""
-
-ГУГЛДАН ЖҮЗДЕГЕН САЙТТАРДЫ СҮЗІП, СӨЙЛЕМ ҚҰРАУ ФУНКЦИЯСЫ
-
+# ======================
+# GOOGLE / DUCKDUCKGO INFO
+# ======================
 def search_google_and_compose(topic):
-try:
-# Гуглдың ашық іздеу жүйесінен мәліметтер жинау
-search_url = f"https://html.duckduckgo.com/html/?q={quote(topic)}"
-headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-res = requests.get(search_url, headers=headers, timeout=5)
+    try:
+        search_url = f"https://html.duckduckgo.com/html/?q={quote(topic)}"
+        headers = {"User-Agent": "Mozilla/5.0"}
 
-if res.status_code == 200:  
-        # Сайттардың сипаттамаларын (snippet) тауып алу  
-        snippets = re.findall(r'<td class="result-snippet">(.*?)</td>', res.text, re.DOTALL)  
-        if snippets:  
-            composed_text = ""  
-            # Табылған мәліметтерді тазалап, біріктіріп сөйлем құрау  
-            for snip in snippets[:4]:  # Ең негізгі 4 сайттың дерегін аламыз  
-                clean_snip = re.sub(r'<[^>]+>', '', snip).strip() # HTML тегтерді өшіру  
-                composed_text += clean_snip + " "  
-            return composed_text  
-except: pass  
-return ""
+        res = requests.get(search_url, headers=headers, timeout=6)
 
-Ботпен амандасу
+        if res.status_code == 200:
+            snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', res.text, re.DOTALL)
 
-if "messages" not in st.session_state:
-st.session_state.messages = []
-welcome = "Привет! Я Serik-Ai PRO Max. Текст, рефераты, поиск по сотням сайтов Гугла и генерация чистых фото — всё готово к работе!"
-st.session_state.messages.append({"role": "assistant", "content": welcome})
-st.markdown(get_audio_html(welcome), unsafe_allow_html=True)
+            composed = ""
+            for snip in snippets[:4]:
+                clean = re.sub(r'<[^>]+>', '', snip).strip()
+                composed += clean + " "
 
-for message in st.session_state.messages:
-with st.chat_message(message["role"]):
-st.markdown(message["content"])
+            return composed.strip()
 
-НЕГІЗГІ АҚПАРАТ ПЕН ФОТО ДВИЖОГЫ
+    except:
+        pass
 
+    return ""
+
+# ======================
+# SMART CONTENT
+# ======================
 def get_smart_content(q):
-q_low = q.lower().strip()
+    q_low = q.lower().strip()
 
-# 1. Тез жауаптар  
-fast_answers = {  
-    "привет": "Привет! Я готов к работе. О чем написать?",  
-    "как дела": "Отлично! Мои сервера работают на полную мощь.",  
-    "кто тебя создал": "Меня создал гениальный Нұрик!"  
-}  
-if q_low in fast_answers: return fast_answers[q_low]  
+    fast_answers = {
+        "привет": "Привет! Я Serik-AI PRO Max готов к работе.",
+        "как дела": "Отлично! Всё работает стабильно.",
+        "кто тебя создал": "Меня создал Нұрик!"
+    }
 
-# 2. ТАЗА ФОТО ГЕНЕРАТОР (Егер промптта фото сөзі болса)  
-if "фото" in q_low or "картинка" in q_low or "нарисуй" in q_low or "рисунок" in q_low:  
-    photo_topic = q_low.replace("фото", "").replace("картинку", "").replace("нарисуй", "").replace("рисунок", "").replace("сделай", "").strip()  
-    if not photo_topic: photo_topic = "scifi city"  
-      
-    seed = random.randint(1, 999999)  
-    img_url = f"https://image.pollinations.ai/p/{quote(photo_topic)}?width=800&height=600&seed={seed}&nofeed=true"  
-      
-    # Фотоны экранға таза күйінде шығару  
-    photo_html = f"""  
-    <div class="photo-box">  
-        <img src="{img_url}" style="width:100%; height:auto; display:block;">  
-    </div>  
-    """  
-    st.markdown(photo_html, unsafe_allow_html=True)  
-    return f"Изображение по вашему запросу '{photo_topic}' успешно сгенерировано!"  
+    if q_low in fast_answers:
+        return fast_answers[q_low], None
 
-# 3. МӘТІН ЖӘНЕ СӨЙЛЕМ ҚҰРАУ ОРНЫ  
-topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").replace("на тему", "").strip()  
-  
-# Алдымен Википедияны тексереміз  
-wiki_summary = ""  
-wiki_content = ""  
-try:  
-    page = wikipedia.page(topic)  
-    wiki_content = page.content  
-    wiki_summary = page.summary  
-except: pass  
+    # ======================
+    # PHOTO GENERATOR
+    # ======================
+    if any(x in q_low for x in ["фото", "картинка", "рисунок", "нарисуй"]):
+        topic = q_low
+        for w in ["фото", "картинку", "рисунок", "нарисуй", "сделай"]:
+            topic = topic.replace(w, "")
+        topic = topic.strip() or "scifi city"
 
-# Гугл мен жүздеген сайттардан қосымша ақпарат жинап, сөйлем құрау  
-google_composed_info = search_google_and_compose(topic)  
+        seed = random.randint(1, 999999)
+        img_url = f"https://image.pollinations.ai/p/{quote(topic)}?width=800&height=600&seed={seed}&nofeed=true"
 
-# Егер екі жақтан да түк табылмаса  
-if not wiki_summary and not google_composed_info:  
-    return f"Я искал на сотнях сайтов Гугла и в Википедии про '{topic}', но ничего не нашлось. Попробуй написать тему точнее."  
+        html = f"""
+        <div class="photo-box">
+            <img src="{img_url}" style="width:100%; height:auto;">
+        </div>
+        """
 
-# Барлық жиналған деректерді біріктіріп, мәтін құрастыру  
-main_intel_data = wiki_summary if wiki_summary else google_composed_info  
-extended_data = wiki_content[:4000] if wiki_content else google_composed_info  
+        return f"Изображение: {topic}", html
 
-# Сұраныс форматы бойынша мәтінді дайындау  
-if "реферат" in q_low:  
-    full_ref = f"### РЕФЕРАТ: {topic.upper()}\n\n"  
-    full_ref += f"**Введение:** {main_intel_data}\n\n"  
-    full_ref += f"**Основная часть (Анализ интернет-ресурсов):**\n{extended_data}...\n\n"  
-    full_ref += "**Заключение:** Проведенный анализ на основе сотен сетевых источников показывает высокую историческую и практическую важность данной темы."  
-    return full_ref  
-  
-elif "эссе" in q_low:  
-    return f"### ЭССЕ НА ТЕМУ: {topic.upper()}\n\n**Мое мнение и анализ источников:** Данная тематика вызывает много споров в сети. На основе изученных материалов сайтов, можно утверждать следующее: {main_intel_data} Это доказывает актуальность вопроса в наше время."  
-      
-else:  
-    # Жай сұраныс болса, қысқаша талдауды береді  
-    return f"### Результат анализа по запросу: {topic}\n\n{main_intel_data}"
+    # ======================
+    # TEXT / WIKI
+    # ======================
+    topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
 
-Жазу жолағы
+    wiki_summary = ""
+    wiki_content = ""
 
-if prompt := st.chat_input("Напиши реферат про Александра Македонского или сделай фото робота..."):
-st.session_state.messages.append({"role": "user", "content": prompt})
-with st.chat_message("user"): st.markdown(prompt)
+    try:
+        page = wikipedia.page(topic)
+        wiki_summary = page.summary
+        wiki_content = page.content
+    except:
+        pass
 
-with st.chat_message("assistant"):  
-    response = get_smart_content(prompt)  
-    st.markdown(response)  
-    # Жауаптың басын дауыстап оқу  
-    st.markdown(get_audio_html(response), unsafe_allow_html=True)  
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    google_data = search_google_and_compose(topic)
 
-Мына кодты дұрыстап берші импорт Википедия қате кетті диді стреамлит гитхуб арқылы істедім
+    if not wiki_summary and not google_data:
+        return f"Я не нашел информацию про '{topic}'. Попробуй точнее.", None
+
+    main = wiki_summary if wiki_summary else google_data
+
+    # ======================
+    # REF / ESSAY
+    # ======================
+    if "реферат" in q_low:
+        text = f"""РЕФЕРАТ: {topic}
+
+Введение:
+{main}
+
+Основная часть:
+{wiki_content[:1500] if wiki_content else google_data}
+
+Заключение:
+Анализ показывает важность темы."""
+        return text, None
+
+    if "эссе" in q_low:
+        text = f"""ЭССЕ: {topic}
+
+Анализ:
+{main}
+
+Вывод: тема актуальна и интересна."""
+        return text, None
+
+    return main, None
+
+# ======================
+# CHAT INIT
+# ======================
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+    welcome = "Привет! Я Serik-AI PRO Max."
+    st.session_state.messages.append({"role": "assistant", "content": welcome})
+
+# ======================
+# DISPLAY CHAT
+# ======================
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+# ======================
+# INPUT
+# ======================
+prompt = st.chat_input("Напиши запрос...")
+
+if prompt:
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    with st.chat_message("assistant"):
+        text, image_html = get_smart_content(prompt)
+
+        st.markdown(text)
+
+        if image_html:
+            st.markdown(image_html, unsafe_allow_html=True)
+
+        audio = get_audio(text)
+        if audio:
+            st.audio(audio, format="audio/mp3")
+
+        st.session_state.messages.append({"role": "assistant", "content": text})
