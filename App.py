@@ -8,6 +8,7 @@ import io
 import random
 import os
 import json
+import difflib  # ТҮЗЕТІЛДІ: Қате жазылған сөздерді тану үшін қосылды
 from requests.utils import quote
 
 # ======================
@@ -16,7 +17,6 @@ from requests.utils import quote
 st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 wikipedia.set_lang("ru")
 
-# РАЗРАБОТЧИК ПАРОЛІ (Осы жерден парольді ауыстыруға болады)
 DEV_PASSWORD = "nurik777" 
 
 # ======================
@@ -39,6 +39,33 @@ def save_to_memory_base(question, answer):
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=4)
 
+# ---------------------------------------------------------
+# ТҮЗЕТІЛДІ: ҚАТЕЛЕРДІ ТҮЗЕТІП, ЖАҚЫН СӨЗДІ ТАБУ ФУНКЦИЯСЫ
+# ---------------------------------------------------------
+def find_closest_answer(user_query, memory_base):
+    """Қолданушы қате жазса да, базадан ең ұқсас сұрақты тауып, жауабын қайтарады"""
+    user_query = user_query.lower().strip()
+    
+    # Базадағы бүкіл дайын сұрақтардың тізімі
+    saved_questions = list(memory_base.keys())
+    
+    if not saved_questions:
+        return None
+        
+    # Ең жақын, ұқсас сөзді іздеу (n=1 - ең жақын біреуі, cutoff=0.6 - 60% ұқсастық жеткілікті)
+    closest_matches = difflib.get_close_matches(user_query, saved_questions, n=1, cutoff=0.6)
+    
+    if closest_matches:
+        matched_question = closest_matches[0]
+        # Дәл қазір қаншалықты ұқсас екенін пайызбен есептеу (тексеру үшін)
+        similarity = difflib.SequenceMatcher(None, user_query, matched_question).ratio()
+        
+        # Егер ұқсастық 65%-дан жоғары болса, бот осы сұрақты меңзеп тұр деп шешеді
+        if similarity >= 0.65:
+            return memory_base[matched_question]
+            
+    return None
+
 # ======================
 # SIDEBAR (ОБОЙ ЖӘНЕ ПАРОЛЬ)
 # ======================
@@ -48,12 +75,10 @@ bg_option = st.sidebar.selectbox(
     ["Тёмный космос (По умолчанию)", "Киберпанк neon", "Матрица green", "Мягкий серый", "Светлая тема"]
 )
 
-# ТҮЗЕТІЛДІ: Разработчик режимін тексеруге арналған құпия сөз енгізу жолы
 st.sidebar.markdown("---")
 st.sidebar.title("🛠️ Режим Разработчика")
 user_password = st.sidebar.text_input("Введите пароль разработчика:", type="password")
 
-# Пароль дұрыс па, тексеру
 is_developer = (user_password == DEV_PASSWORD)
 
 if is_developer:
@@ -62,7 +87,6 @@ else:
     if user_password:
         st.sidebar.error("Неверный пароль! Доступ ограничен. ❌")
 
-# Дизайн стильдері
 bg_styles = {
     "Тёмный космос (По умолчанию)": "background-color: #0e1117; color: white;",
     "Киберпанк neon": "background: linear-gradient(135deg, #120c1f 0%, #05020a 100%); background-attachment: fixed; color: #00ffcc;",
@@ -121,7 +145,7 @@ def get_audio(text):
     return None
 
 # ======================
-# GOOGLE / DUCKDUCKGO INFO
+# GOOGLE INFO
 # ======================
 def search_google_and_compose(topic):
     try:
@@ -140,7 +164,7 @@ def search_google_and_compose(topic):
     return ""
 
 # ======================
-# ЧАТ МОДЕЛІ (ChatGPT / Gemini СИЯҚТЫ)
+# ЧАТ МОДЕЛІ
 # ======================
 def chat_with_ai(user_prompt):
     try:
@@ -158,11 +182,8 @@ def chat_with_ai(user_prompt):
 def get_smart_content(q):
     q_low = q.lower().strip()
 
-    # ---------------------------------------------------------
-    # ТҮЗЕТІЛДІ: РАЗРАБОТЧИК ПРАВОСЫН ТЕКСЕРУ АРҚЫЛЫ САКТАУ
-    # ---------------------------------------------------------
+    # Обучение ИИ
     if q_low.startswith("запомни"):
-        # Егер қолданушы пароль енгізбесе немесе қате енгізсе, үйретуге рұқсат бермейді
         if not is_developer:
             return "❌ У вас нет прав разработчика для обучения ИИ! Пожалуйста, введите верный пароль в меню слева."
 
@@ -179,10 +200,14 @@ def get_smart_content(q):
         
         return "Пожалуйста, используй формат: **Запомни [вопрос] это [ответ]**"
 
-    # Сұрақ базада бар ма, тексеру (Бұны кез келген қолданушы көре алады)
+    # ---------------------------------------------------------
+    # ТҮЗЕТІЛДІ: АҚЫЛДЫ ІЗДЕУ (ҚАТЕЛЕРДІ АВТОМАТТЫ ТҮЗЕТУ)
+    # ---------------------------------------------------------
     memory_base = load_memory_base()
-    if q_low in memory_base:
-        return memory_base[q_low]
+    smart_answer = find_closest_answer(q, memory_base)
+    
+    if smart_answer:
+        return smart_answer  # Егер сұрақ қате болса да ұқсас нұсқасы табылса, жауап береді
 
     # Ескі фаст-жауаптар
     fast_answers = {
