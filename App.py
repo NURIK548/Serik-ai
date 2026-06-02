@@ -10,6 +10,7 @@ import os
 import json
 import difflib
 from requests.utils import quote
+import speech_recognition as sr  # ЖАНА: Дауысты тану үшін
 
 # ======================
 # БАПТАУЛАР ЖӘНЕ ПАРОЛЬ
@@ -61,6 +62,24 @@ def find_closest_answer(user_query, memory_base):
     return None
 
 # ======================
+# ЖАҢА: ДАУЫСТЫ ТЫҢДАУ ЖӘНЕ ОЯНУ (WAKE WORD)
+# ======================
+def listen_for_wake_word():
+    """Микрофонды қосып, 'Серик' деген сөзді күтеді"""
+    recognizer = sr.Recognizer()
+    with sr.Microphone() as source:
+        # Айналадағы артық шуды басу
+        recognizer.adjust_for_ambient_noise(source, duration=0.5)
+        try:
+            # 3 секунд ішінде дыбыс жазып алады
+            audio = recognizer.listen(source, timeout=3, phrase_time_limit=4)
+            # Орыс және қазақ тіліндегі дыбысты мәтінге айналдыру
+            text = recognizer.recognize_google(audio, language="ru-RU").lower().strip()
+            return text
+        except:
+            return ""
+
+# ======================
 # SIDEBAR МӘЗІРІ ЖӘНЕ ФУНКЦИЯЛАР
 # ======================
 st.sidebar.title("🎨 Темы оформления")
@@ -100,9 +119,6 @@ if is_developer:
                 st.rerun()
     else:
         st.sidebar.info("База данных пока пуста.")
-else:
-    if user_password:
-        st.sidebar.error("Неверный пароль! ❌")
 
 # Дизайн
 bg_styles = {
@@ -215,33 +231,65 @@ def get_smart_content(q, doc_context=""):
 # ======================
 # CHAT INTERFACE
 # ======================
+st.title("🤖 Serik-Ai PRO Max Ultra")
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "Привет! Я Serik-AI PRO Max Ultra. Я готов слушать и отвечать."})
+    st.session_state.messages.append({"role": "assistant", "content": "Привет! Назови моё имя 'Серик', чтобы я включился и ответил!"})
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ТҮЗЕТІЛДІ: ТЕЛЕФОНДА ДА, КОМПЬЮТЕРДЕ ДЕ НАҚТЫ ЕСТИТІН КІРІСТІРІЛГЕН БРАУЗЕРЛІК ДАУЫС ЖҮЙЕСІ
+# ---------------------------------------------------------
+# ЖАҢА: АТЫН АТАҒАНДА ОЯНУ ЖҮЙЕСІНІҢ ИНТЕРФЕЙСІ
+# ---------------------------------------------------------
 st.write("---")
-st.write("🎙️ **Голосовой ввод для телефона и ПК:**")
+col_btn, col_status = st.columns([1, 4])
 
-# Телефон клавиатурасындағы дауыспен жазу жүйесін қолдану нұсқауымен бірге таза чат-енгізу
-prompt = st.chat_input("Напишите или продиктуйте запрос (используйте микрофон на клавиатуре телефона)...")
+# Ояту режимін іске қосу батырмасы
+start_listening = col_btn.button("Включить режим 'Голосовой Серик' 📡")
 
+prompt = ""
+
+if start_listening:
+    col_status.warning("Слушаю... Скажи громко: 'Серик ... [твой вопрос]' 🎙️")
+    
+    # Дауысты фонда тыңдаймыз
+    voice_input = listen_for_wake_word()
+    
+    if voice_input:
+        col_status.info(f"Распознано: '{voice_input}'")
+        
+        # Егер қолданушының сөзінде "серик" деген есім болса
+        if "серик" in voice_input:
+            # "серик" деген сөзді алып тастап, тек сұрақтың өзін қалдырамыз
+            prompt = voice_input.replace("серик", "").strip()
+            if not prompt:
+                prompt = "Привет"  # Егер жай ғана атын атаса, привет деп жауап береді
+        else:
+            col_status.error("Вы не назвали имя 'Серик'. Попробуйте еще раз.")
+    else:
+        col_status.error("Ничего не услышал. Повторите громче.")
+
+# Кәдімгі мәтінмен жазу жолағы да қатар жұмыс істей береді
+text_prompt = st.chat_input("Или напиши запрос сюда вручную...")
+if text_prompt:
+    prompt = text_prompt
+
+# Жауап беру бөлімі
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Думаю..."):
+        with st.spinner("Серик думает..."):
             text = get_smart_content(prompt, file_context)
         st.markdown(text)
         
         audio = get_audio(text)
         if audio:
-            st.audio(audio, format="audio/mp3")
+            st.audio(audio, format="audio/mp3", autoplay=True) # ЖАҢА: autoplay=True арқылы дауыс бірден автоматты шығады
             
         st.session_state.messages.append({"role": "assistant", "content": text})
