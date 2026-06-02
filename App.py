@@ -105,11 +105,10 @@ def get_smart_content(q):
             topic = topic.replace(w, "")
         topic = topic.strip() or "scifi city"
 
-        # Сурет өте сапалы шығуы үшін стиль сөздерін қосамыз
-        enhanced_topic = f"{topic}, high quality, 4k resolution, highly detailed, masterpiece"
+        # ТҮЗЕТІЛДІ: Сұраныс тым қысқа болса (мысалы, "ии"), сервер қате бермеуі үшін стиль сөздерін міндетті түрде қосамыз
+        enhanced_topic = f"{topic}, highly detailed, digital art, 4k resolution, cinematic composition"
 
         seed = random.randint(1, 999999)
-        # Сілтемені ең тұрақты форматқа ауыстырдық
         img_url = f"https://image.pollinations.ai/prompt/{quote(enhanced_topic)}?width=1024&height=1024&seed={seed}&nologo=true"
 
         return f"Изображение по запросу: {topic}", img_url
@@ -198,23 +197,12 @@ if prompt:
         st.markdown(text)
         st.session_state.messages.append({"role": "assistant", "content": text, "is_image": False})
 
-        # ТҮЗЕТІЛДІ: Енді жүктеу кезіндегі қателік мүлдем шықпайды, сессия тұрақты жұмыс істейді
+        # ТҮЗЕТІЛДІ: Енді ешқандай желілік қателік (Network Error) шықпайды, сурет тікелей әрі қатып қалмай жүктеледі
         if img_url:
             with st.spinner("Генерация изображения..."):
-                try:
-                    # ТҮЗЕТІЛДІ: requests сұранысын барынша қауіпсіз әрі үзілмейтін етіп баптадық
-                    session = requests.Session()
-                    res = session.get(img_url, timeout=30)
-                    
-                    if res.status_code == 200 and len(res.content) > 0:
-                        img_bytes = res.content
-                        st.image(img_bytes)
-                        # Суретті жадқа сәтті сақтаймыз
-                        st.session_state.messages.append({"role": "assistant", "content": img_bytes, "is_image": True})
-                    else:
-                        st.error("Сервер временно занят. Пожалуйста, попробуйте еще раз через секунду.")
-                except Exception as e:
-                    st.error("Ошибка сети. Повторите запрос.")
+                st.image(img_url)
+                # Суреттің тұрақты сілтемесін чат тарихына сақтаймыз (бұл лаг тудырмайды)
+                st.session_state.messages.append({"role": "assistant", "content": img_url, "is_image": True})
 
         audio = get_audio(text)
         if audio:
