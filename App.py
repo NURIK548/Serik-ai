@@ -105,12 +105,13 @@ def get_smart_content(q):
             topic = topic.replace(w, "")
         topic = topic.strip() or "scifi city"
 
-        # ТҮЗЕТІЛДІ: Дұрыс API сілтемесі (/prompt/)
-        seed = random.randint(1, 999999)
-        img_url = f"https://image.pollinations.ai/prompt/{quote(topic)}?width=800&height=600&seed={seed}&nologo=true"
+        # Нақты сапалы сурет шығару үшін промптқа стилдер қосамыз
+        enhanced_topic = f"{topic}, high quality, 4k resolution, highly detailed"
 
-        # ТҮЗЕТІЛДІ: HTML емес, суреттің тікелей сілтемесін береміз
-        return f"Изображение: {topic}", img_url
+        seed = random.randint(1, 999999)
+        img_url = f"https://image.pollinations.ai/prompt/{quote(enhanced_topic)}?width=1024&height=1024&seed={seed}&nologo=true"
+
+        return f"Изображение по запросу: {topic}", img_url
 
     # ======================
     # TEXT / WIKI
@@ -167,14 +168,14 @@ def get_smart_content(q):
 if "messages" not in st.session_state:
     st.session_state.messages = []
     welcome = "Привет! Я Serik-AI PRO Max."
-    st.session_state.messages.append({"role": "assistant", "content": welcome})
+    st.session_state.messages.append({"role": "assistant", "content": welcome, "is_image": False})
 
 # ======================
 # DISPLAY CHAT
 # ======================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        # ТҮЗЕТІЛДІ: Егер хабарлама сурет болса, оны жоғалтпай дұрыс шығарады
+        # ТҮЗЕТІЛДІ: Ескі суреттерді интернеттен қайта жүктемей, жадтан лезде шығарады (лаг жоқ)
         if msg.get("is_image"):
             st.image(msg["content"])
         else:
@@ -186,7 +187,7 @@ for msg in st.session_state.messages:
 prompt = st.chat_input("Напиши запрос...")
 
 if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    st.session_state.messages.append({"role": "user", "content": prompt, "is_image": False})
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -195,12 +196,22 @@ if prompt:
         text, img_url = get_smart_content(prompt)
 
         st.markdown(text)
-        st.session_state.messages.append({"role": "assistant", "content": text})
+        st.session_state.messages.append({"role": "assistant", "content": text, "is_image": False})
 
-        # ТҮЗЕТІЛДІ: Суретті қатесіз шығарады және чат тарихына мықтап сақтайды
+        # ТҮЗЕТІЛДІ: Суретті жүктеп жатқанда қысқаша spinner тұрады, сосын суретті БАЙТ түрінде сақтайды
         if img_url:
-            st.image(img_url)
-            st.session_state.messages.append({"role": "assistant", "content": img_url, "is_image": True})
+            with st.spinner("Генерация изображения..."):
+                try:
+                    res = requests.get(img_url, timeout=15)
+                    if res.status_code == 200:
+                        img_bytes = res.content
+                        st.image(img_bytes)
+                        # Чат тарихына сілтеме емес, дайын суреттің өзін (байттарын) сақтаймыз
+                        st.session_state.messages.append({"role": "assistant", "content": img_bytes, "is_image": True})
+                    else:
+                        st.error("Не удалось получить изображение от сервера.")
+                except:
+                    st.error("Ошибка сети при создании картинки.")
 
         audio = get_audio(text)
         if audio:
