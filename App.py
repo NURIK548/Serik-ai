@@ -61,18 +61,29 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ======================
-# ДАУЫС (TTS)
+# ДАУЫС (TTS) - СМАЙЛИК ПЕН НҮКТЕЛЕР ОҚЫЛМАЙДЫ
 # ======================
 def get_audio(text):
     try:
         clean_txt = text[:200]
-        tts = gTTS(text=clean_txt, lang='ru')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        return fp
+        
+        # ТҮЗЕТІЛДІ: Смайликтерді (Emoji) мәтіннен толық өшіру
+        clean_txt = re.sub(r'[\U00010000-\U0010ffff]|\u263a|\u263b', '', clean_txt)
+        
+        # ТҮЗЕТІЛДІ: Нүкте, үтір және басқа тыныс белгілерін дыбыстамау үшін бос орынға ауыстыру
+        clean_txt = re.sub(r'[.,\/#!$%\^&\*;:{}=\-_`~()?"\n]', ' ', clean_txt)
+        
+        clean_txt = re.sub(r'\s+', ' ', clean_txt).strip()
+
+        if clean_txt:
+            tts = gTTS(text=clean_txt, lang='ru')
+            fp = io.BytesIO()
+            tts.write_to_fp(fp)
+            fp.seek(0)
+            return fp
     except:
         return None
+    return None
 
 # ======================
 # GOOGLE / DUCKDUCKGO INFO
@@ -83,7 +94,7 @@ def search_google_and_compose(topic):
         headers = {"User-Agent": "Mozilla/5.0"}
         res = requests.get(search_url, headers=headers, timeout=6)
         if res.status_code == 200:
-            snippets = re.findall(r'<a class="result__snippet".=.*?>(.*?)</a>', res.text, re.DOTALL)
+            snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', res.text, re.DOTALL)
             composed = ""
             for snip in snippets[:4]:
                 clean = re.sub(r'<[^>]+>', '', snip).strip()
@@ -94,13 +105,12 @@ def search_google_and_compose(topic):
     return ""
 
 # ======================
-# СВОБОДНОЕ ОБЩЕНИЕ (ChatGPT / Gemini СИЯҚТЫ)
+# ЧАТ МОДЕЛІ (ChatGPT / Gemini СИЯҚТЫ)
 # ======================
 def chat_with_ai(user_prompt):
-    """Пайдаланушымен кез келген тақырыпта шексіз әрі еркін сөйлесетін ақылды AI"""
     try:
-        # Тұрақты әрі ақылды мәтіндік модель (Llama-3/GPT деңгейінде)
-        api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Ты+умеешь+поддерживать+любую+беседу+как+ChatGPT+и+Gemini.+Отвечай+всегда+на+языке+пользователя+живо+и+интересно."
+        # ТҮЗЕТІЛДІ: Тек қана орыс тілінде еркін әңгімелесу нұсқауы берілді
+        api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Ты+умеешь+поддерживать+любую+беседу+как+ChatGPT+и+Gemini.+Отвечай+всегда+СТРОГО+на+русском+языке+живо+и+интересно."
         res = requests.get(api_url, timeout=15)
         if res.status_code == 200:
             return res.text.strip()
@@ -109,34 +119,67 @@ def chat_with_ai(user_prompt):
     return "Я тут, давай поболтаем! О чём думаешь? 😊"
 
 # ======================
-# SMART CONTENT
+# SMART CONTENT (ЕСКІ НҰСҚА ҚАЛПЫНА КЕЛТІРІЛДІ)
 # ======================
 def get_smart_content(q):
     q_low = q.lower().strip()
 
-    # ТҮЗЕТІЛДІ: Егер қолданушы нақты реферат немесе эссе сұраса ғана интернеттен іздейді
-    if "реферат" in q_low or "эссе" in q_low or "напиши доклад" in q_low:
-        topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("pro", "").replace("про", "").strip()
-        
-        wiki_summary = ""
-        wiki_content = ""
-        try:
-            page = wikipedia.page(topic)
-            wiki_summary = page.summary
-            wiki_content = page.content
-        except:
-            pass
+    fast_answers = {
+        "привет": "Привет! Я Serik-AI PRO Max готов к работе.",
+        "как дела": "Отлично! Всё работает стабильно.",
+        "кто тебя создал": "Меня создал Нурхан"
+    }
 
-        google_data = search_google_and_compose(topic)
-        main = wiki_summary if wiki_summary else google_data
+    if q_low in fast_answers:
+        return fast_answers[q_low]
 
-        if "реферат" in q_low and main:
-            return f"РЕФЕРАТ: {topic}\n\nВведение:\n{main}\n\nОсновная часть:\n{wiki_content[:1500] if wiki_content else google_data}\n\nЗаключение:\nАнализ показывает важность темы."
-        elif "эссе" in q_low and main:
-            return f"ЭССЕ: {topic}\n\nАнализ:\n{main}\n\nВывод: тема актуальна и интересна."
+    # ТҮЗЕТІЛДІ: Егер қолданушы жай ғана сөйлесіп жатса (реферат/эссе демесе), бірден ЧАТ режим қосылады
+    if "реферат" not in q_low and "эссе" not in q_low:
+        return chat_with_ai(q)
 
-    # ТҮЗЕТІЛДІ: Қалған жағдайдың бәрінде (привет, как дела, не істеп жатырсың, т.б.) таза нейросеть ретінде еркін сөйлесе береді
-    return chat_with_ai(q)
+    # НАҚТЫ ЕСКІ ОРИГИНАЛ КОД (ЕШҚАНДАЙ ӨЗГЕРІССІЗ РЕФЕРАТ ПЕН ЭССЕ БӨЛІМІ)
+    topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
+
+    wiki_summary = ""
+    wiki_content = ""
+
+    try:
+        page = wikipedia.page(topic)
+        wiki_summary = page.summary
+        wiki_content = page.content
+    except:
+        pass
+
+    google_data = search_google_and_compose(topic)
+
+    if not wiki_summary and not google_data:
+        return chat_with_ai(q)
+
+    main = wiki_summary if wiki_summary else google_data
+
+    if "реферат" in q_low:
+        text = f"""РЕФЕРАТ: {topic}
+
+Введение:
+{main}
+
+Основная часть:
+{wiki_content[:1500] if wiki_content else google_data}
+
+Заключение:
+Анализ показывает важность темы."""
+        return text
+
+    if "эссе" in q_low:
+        text = f"""ЭССЕ: {topic}
+
+Анализ:
+{main}
+
+Вывод: тема актуальна и интересна."""
+        return text
+
+    return main
 
 # ======================
 # CHAT INIT
@@ -165,7 +208,7 @@ if prompt:
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Ойланып жатырмын..."):
+        with st.spinner("Думаю..."):
             text = get_smart_content(prompt)
 
         st.markdown(text)
