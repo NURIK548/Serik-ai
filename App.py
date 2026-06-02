@@ -93,8 +93,8 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎨 Serik-Ai Сурет Генераторы")
-st.write("Не сурет керек екенін жаз (Қазақша немесе Орысша):")
+st.title("🎨 Serik-Ai Ваш Личный помощник")
+st.write("что хотите спросите (он может ошибатся):")
 
 # Сурет тарту функциясы
 def draw_image(prompt_text):
