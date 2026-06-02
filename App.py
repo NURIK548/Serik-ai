@@ -15,30 +15,74 @@ st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 wikipedia.set_lang("ru")
 
 # ======================
-# ДИЗАЙН
+# ОБОЙ ТАҢДАУ (SIDEBAR)
 # ======================
-st.markdown("""
+# Сол жақ мәзірде қолданушы өзіне ұнайтын обойды таңдайды
+st.sidebar.title("🎨 Темы оформления")
+bg_option = st.sidebar.selectbox(
+    "Выберите фон для Serik-Ai:",
+    ["Тёмный космос (По умолчанию)", "Киберпанк неоновый", "Матрица зелёный", "Мягкий серый", "Светлая тема"]
+)
+
+# Әр обойға сәйкес келетін CSS кодтар
+bg_styles = {
+    "Тёмный космос (По умолчанию)": """
+        background-color: #0e1117;
+        color: white;
+    """,
+    "Киберпанк неоновый": """
+        background: linear-gradient(135deg, #120c1f 0%, #05020a 100%);
+        background-attachment: fixed;
+        color: #00ffcc;
+    """,
+    "Матрица зелёный": """
+        background-color: #000000;
+        color: #00ff00;
+        font-family: 'Courier New', monospace;
+    """,
+    "Мягкий серый": """
+        background-color: #2b2d42;
+        color: #edf2f4;
+    """,
+    "Светлая тема": """
+        background-color: #f8f9fa;
+        color: #212529;
+    """
+}
+
+selected_bg = bg_styles[bg_option]
+
+# Кодтың ішіндегі мәтіндер таңдалған обойға қарай автоматты түрде түсін өзгертеді
+text_color = "#212529" if bg_option == "Светлая тема" else "white"
+if bg_option == "Матрица зелёный":
+    text_color = "#00ff00"
+elif bg_option == "Киберпанк неоновый":
+    text_color = "#00ffcc"
+
+# ======================
+# ДИЗАЙН (ӨЗГЕРТІЛДІ)
+# ======================
+st.markdown(f"""
 <style>
-.stApp {
-    background-color: #0e1117;
-    color: white;
-}
-.stMarkdown, p, h1, h2, h3, span, label {
-    color: white !important;
-}
-.stChatInput textarea {
+.stApp {{
+    {selected_bg}
+}}
+.stMarkdown, p, h1, h2, h3, span, label {{
+    color: {text_color} !important;
+}}
+.stChatInput textarea {{
     background-color: #1a1f2c !important;
     color: white !important;
     border: 1px solid #3a3f50 !important;
-}
-.photo-box {
+}}
+.photo-box {{
     width: 100%;
     max-width: 750px;
     border-radius: 12px;
     border: 2px solid #3a3f50;
     overflow: hidden;
     margin: 15px 0;
-}
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,23 +141,6 @@ def get_smart_content(q):
         return fast_answers[q_low], None
 
     # ======================
-    # PHOTO GENERATOR
-    # ======================
-    if any(x in q_low for x in ["фото", "картинка", "рисунок", "нарисуй"]):
-        topic = q_low
-        for w in ["фото", "картинку", "рисунок", "нарисуй", "сделай"]:
-            topic = topic.replace(w, "")
-        topic = topic.strip() or "scifi city"
-
-        # ТҮЗЕТІЛДІ: Сұраныс тым қысқа болса (мысалы, "ии"), сервер қате бермеуі үшін стиль сөздерін міндетті түрде қосамыз
-        enhanced_topic = f"{topic}, highly detailed, digital art, 4k resolution, cinematic composition"
-
-        seed = random.randint(1, 999999)
-        img_url = f"https://image.pollinations.ai/prompt/{quote(enhanced_topic)}?width=1024&height=1024&seed={seed}&nologo=true"
-
-        return f"Изображение по запросу: {topic}", img_url
-
-    # ======================
     # TEXT / WIKI
     # ======================
     topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
@@ -168,17 +195,14 @@ def get_smart_content(q):
 if "messages" not in st.session_state:
     st.session_state.messages = []
     welcome = "Привет! Я Serik-AI PRO Max."
-    st.session_state.messages.append({"role": "assistant", "content": welcome, "is_image": False})
+    st.session_state.messages.append({"role": "assistant", "content": welcome})
 
 # ======================
 # DISPLAY CHAT
 # ======================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        if msg.get("is_image"):
-            st.image(msg["content"])
-        else:
-            st.markdown(msg["content"])
+        st.markdown(msg["content"])
 
 # ======================
 # INPUT
@@ -186,24 +210,18 @@ for msg in st.session_state.messages:
 prompt = st.chat_input("Напиши запрос...")
 
 if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt, "is_image": False})
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        text, img_url = get_smart_content(prompt)
+        text, _ = get_smart_content(prompt)
 
         st.markdown(text)
-        st.session_state.messages.append({"role": "assistant", "content": text, "is_image": False})
-
-        # ТҮЗЕТІЛДІ: Енді ешқандай желілік қателік (Network Error) шықпайды, сурет тікелей әрі қатып қалмай жүктеледі
-        if img_url:
-            with st.spinner("Генерация изображения..."):
-                st.image(img_url)
-                # Суреттің тұрақты сілтемесін чат тарихына сақтаймыз (бұл лаг тудырмайды)
-                st.session_state.messages.append({"role": "assistant", "content": img_url, "is_image": True})
 
         audio = get_audio(text)
         if audio:
             st.audio(audio, format="audio/mp3")
+
+        st.session_state.messages.append({"role": "assistant", "content": text})
