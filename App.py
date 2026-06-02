@@ -3,11 +3,11 @@ import requests
 import re
 import random
 import io
-from gtts import gTTS  # Дауыс беру кітапханасы қайта қосылды
+from gtts import gTTS  # Дауыс беру кітапханасы
 from requests.utils import quote
 
 # ======================
-# НАСТРОЙКИ СЕССИИ ЖУРНАЛА
+# НАСТРОЙКИ СЕССИИ
 # ======================
 st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 
@@ -16,9 +16,10 @@ if "user_name" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    # Сенің нұсқаң бойынша өзгертілген алғашқы сәлемдесу
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": "👋 Ооо, сәлем! Мен Серік-Ай! Алдымен атыңды айтшы, 😊"
+        "content": "👋 Ооо сәлем мен Серік-Аймын! Алдымен атыңды айтсаң, жаттап алайын? 😊"
     })
 
 # ======================
@@ -51,23 +52,26 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================
-# ТІЛДІ АНЫҚТАУ ФУНКЦИЯСЫ (Аудио үшін)
+# ТІЛДІ АНЫҚТАУ (Аудио үшін)
 # ======================
 def detect_text_language(text):
-    # Қазақша ерекше әріптерді іздеу
     kz_chars = re.compile(r'[ӘәҒғҚқҢңӨөҰұҮүҺһІі]')
     if kz_chars.search(text):
+        return "kk"
+    # Егер қазақша әріптер болмаса, бірақ қазақша сөздер болса
+    kz_words = ["сәлем", "атым", "серік", "танысқанымызға", "қуаныштымын", "сурет", "сал"]
+    if any(w in text.lower() for w in kz_words):
         return "kk"
     return "ru"
 
 # ======================
-# СӨЙЛЕУ / АУДИО ЖҮЙЕСІ (TTS)
+# ДАУЫС ПЕН АУДИО ЖҮЙЕСІ (TTS)
 # ======================
 def get_audio(text, lang):
     try:
-        # Смайликтерді (emoji) тазалау, gTTS оларды оқып қателеспеуі үшін
+        # Аудио дұрыс шығуы үшін смайликтерді тазалаймыз
         clean_txt = re.sub(r'[^\w\s,.!?—\-]', '', text)
-        clean_txt = clean_txt[:250] # Тым ұзақ болса, тек басын оқиды
+        clean_txt = clean_txt[:250] # Тым ұзақ мәтінді шектеу
         
         tts = gTTS(text=clean_txt, lang=lang)
         fp = io.BytesIO()
@@ -95,12 +99,12 @@ def generate_hd_image(prompt_text):
     return None, None
 
 # ======================
-# НАҒЫЗ ЖИ ЖҮЙЕСІ (DuckDuckGo AI шлюзі)
+# ЖАСАНДЫ ИНТЕЛЛЕКТ (AI Brain)
 # ======================
 def ask_ai_brain(user_prompt, name):
     try:
         system_instruction = (
-            f"Ты — ИИ-ассистент по имени Серік-Ай PRO Max. Твоя главная фишка — ты разговариваешь точно как живой человек, "
+            f"Ты — ИИ-ассистент по имени Серік-Ай PRO Max. Ты разговариваешь точно как живой человек, "
             f"как близкий друг пользователя. Пользователя зовут: {name if name else 'Друг'}. Обязательно часто обращайся к нему по имени! "
             f"Общайся свободно, используй смайлики (emoji), шути, спрашивай как дела. "
             f"Если пользователь пишет с ошибками (например, 'салем қалайсың нест', 'істецді', 'как сен сияқты'), ты должен "
@@ -131,12 +135,11 @@ def ask_ai_brain(user_prompt, name):
     return "Интернет сәл қатып тұр, қайтадан жазып көрші?"
 
 # ======================
-# БАСҚАРУШЫ ЛОГИКА
+# СМАРТ КОНТЕНТ МЕНЕДЖЕР
 # ======================
 def get_smart_content(q):
     q_low = q.lower().strip()
 
-    # СУРЕТ КОМАНДАСЫН АНЫҚТАУ
     if any(x in q_low for x in ["фото", "картинка", "рисунок", "нарисуй", "сурет", "істецді", "сал"]):
         topic = q_low
         for w in ["фото", "картинку", "рисунок", "нарисуй", "сделай", "сурет", "салып бер", "сал", "істецді"]:
@@ -152,12 +155,11 @@ def get_smart_content(q):
         else:
             return "Қап, сурет салатын серверім сәл шаршап қалыпты. Қайтадан басып көрші?", None, None
 
-    # ЕРКІН ӘҢГІМЕ НЕ ТАПСЫРМАЛАР (ЖИ миын іске қосу)
     ai_response = ask_ai_brain(q, st.session_state.user_name)
     return ai_response, None, None
 
 # ======================
-# CHAT HISTORY DISPLAY
+# ЧАТ ТАРИХЫН КӨРСЕТУ
 # ======================
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
@@ -172,49 +174,57 @@ for i, msg in enumerate(st.session_state.messages):
                 mime="image/png",
                 key=f"dl_{i}"
             )
-        # Бұрынғы хабарламалардың аудиоларын да сақтап көрсетеміз
-        if "audio_bytes" in msg and msg["audio_bytes"]:
-            st.audio(msg["audio_bytes"], format="audio/mp3")
 
 # ======================
-# ЕНГІЗУ ӨРІСІ
+# ЕНГІЗУ ӨРІСІ ЖӘНЕ ДАУЫСТЫ БІРДЕН ОЙНАТУ
 # ======================
 prompt = st.chat_input("Серікке жаз...")
 
 if prompt:
+    # 1. Пайдаланушының хабарламасын көрсету және сақтау
     st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
     
-    # 1. ЕГЕР АТЫ ӘЛІ ЖАТТАЛМАҒАН БОЛСА
-    if st.session_state.user_name is None:
-        clean_name = prompt.replace("Менің атым", "").replace("меня зовут", "").replace("мен", "").replace("атым", "").strip()
-        st.session_state.user_name = clean_name
+    # 2. Жауапты өңдеу
+    with st.chat_message("assistant"):
+        # ЕГЕР АТЫ ӘЛІ ЖАТТАЛМАҒАН БОЛСА
+        if st.session_state.user_name is None:
+            clean_name = prompt.replace("Менің атым", "").replace("меня зовут", "").replace("мен", "").replace("атым", "").strip()
+            st.session_state.user_name = clean_name
+            
+            answer_text = f"🎉 Мәссаған, танысқанымызға өте қуаныштымын, **{clean_name}**! Атыңды миыма толық жазып алдым. Енді біз нағыз достармыз! Не істейміз? 😉"
+            image_html, image_bytes = None, None
         
-        welcome_text = f"🎉 Мәссаған, танысқанымызға өте қуаныштымын, **{clean_name}**! Атыңды миыма толық жазып алдым. Енді біз нағыз достармыз! Маған кез келген тапсырманы бере бер, не істейміз? 😉"
+        # ЕГЕР АТЫ БҰРЫННАН БЕЛГІЛІ БОЛСА
+        else:
+            answer_text, image_html, image_bytes = get_smart_content(prompt)
         
-        # Сәлемдесудің аудиосын жасау (Тілді анықтап)
-        lang = detect_text_language(welcome_text)
-        audio_data = get_audio(welcome_text, lang)
+        # Экранға мәтінді шығару
+        st.markdown(answer_text)
         
+        # Егер сурет болса шығару
+        if image_html:
+            st.markdown(image_html, unsafe_allow_html=True)
+        if image_bytes:
+            st.download_button(
+                label="📥 Жүктеп алу / Скачать фото",
+                data=image_bytes,
+                file_name="serik_ai_photo.png",
+                mime="image/png",
+                key="dl_current"
+            )
+        
+        # ДАУЫСТЫ ОЙНАТУ (Бет жаңармай тұрып бірден шығады)
+        lang = detect_text_language(answer_text)
+        audio_file = get_audio(answer_text, lang)
+        if audio_file:
+            st.audio(audio_file, format="audio/mp3", autoplay=True) # autoplay=True автоматты түрде сөйлейді
+            
+        # Жауапты сессияға сақтаймыз
         st.session_state.messages.append({
             "role": "assistant", 
-            "content": welcome_text,
-            "audio_bytes": audio_data
-        })
-    
-    # 2. ЕГЕР АТЫ БҰРЫННАН ЖАТТАЛҒАН БОЛСА
-    else:
-        text, image_html, image_bytes = get_smart_content(prompt)
-        
-        # Жауаптың тілін анықтап, аудиоға айналдыру
-        lang = detect_text_language(text)
-        audio_data = get_audio(text, lang)
-        
-        st.session_state.messages.append({
-            "role": "assistant", 
-            "content": text, 
+            "content": answer_text, 
             "image_html": image_html,
-            "image_bytes": image_bytes,
-            "audio_bytes": audio_data
+            "image_bytes": image_bytes
         })
-    
-    st.rerun()
