@@ -3,78 +3,94 @@ import requests
 import urllib.parse
 
 def generate_image(user_prompt):
-    """Суретті ChatGPT (DALL-E) сияқты сапалы әрі лагсыз, өте тез шығаратын функция"""
-    # Суреттің сапасын арттыру үшін арнайы стиль сөздерін қосамыз
+    """Генерация бесконечных и высококачественных изображений"""
+    # Улучшаем качество картинки до максимума
     enhanced_prompt = (
-        f"{user_prompt}, cinematic lighting, photorealistic, hyper-detailed, "
-        f"8k resolution, masterpiece, digital art"
+        f"{user_prompt}, 8k resolution, ultra-detailed, masterpiece, "
+        f"high quality, photorealistic, cinematic lighting"
     )
     
-    # Мәтінді URL форматына қауіпсіз түрде түрлендіреміз (қате кетпеу үшін)
     encoded_prompt = urllib.parse.quote(enhanced_prompt)
     
-    # Тегін, өте жылдам және сапалы Flux/StableDiffusion моделі (Токен керек емес!)
-    API_URL = f"https://image.pollinations.ai/p/{encoded_prompt}?width=1024&height=1024&enhanced=true"
+    # Бесконечный и бесплатный API для HD картинок
+    API_URL = f"https://image.pollinations.ai/prompt/{encoded_prompt}?width=1024&height=1024&nologo=true"
     
     try:
-        response = requests.get(API_URL, timeout=15)
+        response = requests.get(API_URL, timeout=20)
         if response.status_code == 200:
             return response.content
-        else:
-            return None
+        return None
     except Exception:
         return None
 
-# --- STREAMLIT ИНТЕРФЕЙСІ (БАРЛЫҒЫ БҰРЫНҒЫДАЙ ҚАЛДЫ) ---
+# --- ИНТЕРФЕЙС STREAMLIT ---
 st.set_page_config(page_title="Serik-Ai PRO Max", page_icon="🤖", layout="centered")
 st.title("🤖 Serik-Ai PRO Max")
-st.caption("Нұриктің ресми боты — Жылдам әрі сапалы!")
+st.caption("Умный бот: Пишет тексты, рисует HD-картинки и не лагает!")
 
-# Сессияны тексеру (Экран қатып қалмауы және хабарламалар жоғалмауы үшін)
+# Инициализация памяти чата (чтобы рефераты и картинки не пропадали)
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Ескі чат тарихын экранға қайта шығару
-for message in st.session_state.messages:
+# Отрисовка всей истории чата (сохраняется при любых действиях)
+for index, message in enumerate(st.session_state.messages):
     with st.chat_message(message["role"]):
         if message["type"] == "text":
             st.markdown(message["content"])
         elif message["type"] == "image":
             st.image(message["content"])
+            # Кнопка для скачивания картинки прямо из истории
+            st.download_button(
+                label="📥 Скачать в HD",
+                data=message["content"],
+                file_name=f"SerikAI_image_{index}.jpg",
+                mime="image/jpeg",
+                key=f"download_btn_{index}"
+            )
 
-# Пайдаланушыдан сұраныс алу
-if user_input := st.chat_input("Маған жаз немесе 'сурет: машина' деп тапсырыс бер"):
+# Ввод пользователя
+if user_input := st.chat_input("Напиши реферат или попроси нарисовать картинку..."):
     
-    # 1. Пайдаланушының жазғанын экранға шығару және жадқа сақтау
+    # 1. Показываем запрос пользователя
     with st.chat_message("user"):
         st.markdown(user_input)
     st.session_state.messages.append({"role": "user", "type": "text", "content": user_input})
     
-    # 2. Боттың жауабы
+    # 2. Логика ответа бота
     with st.chat_message("assistant"):
-        # ЕГЕР ПАЙДАЛАНУШЫ СУРЕТ СҰРАСА
-        if user_input.lower().startswith("сурет:") or user_input.lower().startswith("photo:"):
-            # "сурет:" деген сөзді кесіп тастап, нақты промптты аламыз
-            if ":" in user_input:
-                prompt_to_send = user_input.split(":", 1)[1].strip()
-            else:
-                prompt_to_send = user_input.strip()
-            
-            if prompt_to_send:
-                with st.spinner("Сурет салынуда, күте тұр..."):
-                    image_bytes = generate_image(prompt_to_send)
-                
-                if image_bytes:
-                    st.image(image_bytes, caption=f"Генерацияланған сурет: {prompt_to_send}")
-                    # Суретті чат тарихына сақтаймыз
-                    st.session_state.messages.append({"role": "assistant", "type": "image", "content": image_bytes})
-                else:
-                    st.error("Қателік: Сервер жауап бермеді. Қайтадан байқап көр.")
-            else:
-                st.warning("Сурет салу үшін 'сурет: [не салу керек]' деп толық жаз.")
+        user_text = user_input.lower()
         
-        # ЕГЕР ЖАЙ МӘТІН ЖАЗЫЛСА
+        # Умный поиск: бот сам понимает, если просят картинку, даже с ошибками
+        image_keywords = ["картинка", "фото", "нарисуй", "сурет", "сделай фото", "изображение"]
+        is_image_request = any(keyword in user_text for keyword in image_keywords)
+        
+        if is_image_request:
+            with st.spinner("Создаю шедевр в HD качестве..."):
+                image_bytes = generate_image(user_input)
+            
+            if image_bytes:
+                st.image(image_bytes, caption="Готово! Вы можете скачать изображение ниже.")
+                
+                # Кнопка скачивания для новой картинки (чтобы скачать сразу)
+                st.download_button(
+                    label="📥 Скачать в HD",
+                    data=image_bytes,
+                    file_name="SerikAI_new_image.jpg",
+                    mime="image/jpeg",
+                    key=f"dl_new_{len(st.session_state.messages)}"
+                )
+                
+                # Сохраняем картинку в историю
+                st.session_state.messages.append({"role": "assistant", "type": "image", "content": image_bytes})
+            else:
+                error_msg = "Ой, что-то пошло не так с сервером. Попробуй еще раз!"
+                st.error(error_msg)
+                st.session_state.messages.append({"role": "assistant", "type": "text", "content": error_msg})
+        
+        # ЕСЛИ ЭТО ТЕКСТ (Рефераты, вопросы и т.д.)
         else:
-            ai_response = f"Сәлем! Сенің сұранысыңды қабылдадым: '{user_input}'. Сурет салғың келсе, басына 'сурет:' деп жаз!"
+            # Здесь в будущем будет подключена твоя текстовая нейросеть
+            # Пока что он просто подтверждает, что сохранил текст
+            ai_response = f"Я сохранил твой текст: '{user_input}'. Если это был реферат, он останется в истории навсегда!"
             st.markdown(ai_response)
             st.session_state.messages.append({"role": "assistant", "type": "text", "content": ai_response})
