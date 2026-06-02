@@ -74,7 +74,81 @@ def ask_ai(user_prompt, name, web_context=""):
     except:
         pass
     return "Байланыс үзілді..."
-    
+
+import streamlit as st
+import requests
+import random
+from requests.utils import quote
+
+# Беттің баптаулары
+st.set_page_config(page_title="Serik-Ai Фото Генератор", layout="wide")
+
+# Қараңғы стиль (Дизайн)
+st.markdown("""
+<style>
+.stApp { background-color: #0e1117; color: white; }
+.stMarkdown, p, h1, h2, h3, span, label { color: white !important; }
+.stChatInput textarea { background-color: #1a1f2c !important; color: white !important; }
+.photo-box { width: 100%; max-width: 600px; border-radius: 12px; border: 3px solid #4A90E2; overflow: hidden; margin: 15px 0; }
+</style>
+""", unsafe_allow_html=True)
+
+st.title("🎨 Serik-Ai Сурет Генераторы")
+st.write("Не сурет керек екенін жаз (Қазақша немесе Орысша):")
+
+# Сурет тарту функциясы
+def draw_image(prompt_text):
+    seed = random.randint(1, 999999)
+    # HD сапа беретін баптаулар қосылды
+    hd_prompt = prompt_text + ", 8k resolution, highly detailed, photorealistic"
+    url = f"https://image.pollinations.ai/p/{quote(hd_prompt)}?width=1024&height=1024&seed={seed}&nofeed=true"
+    try:
+        res = requests.get(url, timeout=15)
+        if res.status_code == 200:
+            return res.content, url
+    except:
+        pass
+    return None, None
+
+# Сессияда суреттер тізімін сақтау (Бұрынғы салынған суреттер жоғалмауы үшін)
+if "saved_images" not in st.session_state:
+    st.session_state.saved_images = []
+
+# Ескі салынған суреттерді экранға тізіп көрсету
+for img in st.session_state.saved_images:
+    st.markdown(f"🔹 **{img['title']}**")
+    st.markdown(img['html'], unsafe_allow_html=True)
+    st.download_button(
+        "📥 Скачать фото", 
+        data=img['bytes'], 
+        file_name="photo.png", 
+        mime="image/png", 
+        key=f"dl_{random.randint(1, 999999)}"
+    )
+    st.markdown("---")
+
+# Жаңа сұраныс енгізу өрісі (Ең астында тұрады)
+user_input = st.chat_input("Қандай сурет саламыз? (Мысалы: Мерседес бандитский / БМВ в неоне)...")
+
+if user_input:
+    with st.spinner("Сурет салынып жатыр, күте тұр..."):
+        bytes_data, img_url = draw_image(user_input)
+        
+        if bytes_data:
+            img_html = f'<div class="photo-box"><img src="{img_url}" style="width:100%;"></div>'
+            
+            # Жаңа суретті тізімге қосып қоямыз
+            st.session_state.saved_images.append({
+                "title": user_input,
+                "html": img_html,
+                "bytes": bytes_data
+            })
+            
+            # 🔥 МАНЫЗДЫ: Код кептеліп қалмай, келесі суретті де шексіз салу үшін бетті жаңартамыз!
+            st.rerun()
+        else:
+            st.error("Сурет салу сервері жауап бермеді. Қайтадан байқап көрші.")
+            
 # ======================
 # ДАУЫС (TTS)
 # ======================
