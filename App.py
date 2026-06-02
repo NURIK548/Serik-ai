@@ -96,60 +96,49 @@ st.markdown("""
 st.title("🎨 Serik-Ai Ваш Личный помощник")
 st.write("что хотите спросите (он может ошибатся):")
 
-# Сурет тарту функциясы
-def draw_image(prompt_text):
-    seed = random.randint(1, 999999)
-    # HD сапа беретін баптаулар қосылды
-    hd_prompt = prompt_text + ", 8k resolution, highly detailed, photorealistic"
-    url = f"https://image.pollinations.ai/p/{quote(hd_prompt)}?width=1024&height=1024&seed={seed}&nofeed=true"
-    try:
-        res = requests.get(url, timeout=15)
-        if res.status_code == 200:
-            return res.content, url
-    except:
-        pass
-    return None, None
-
-# Сессияда суреттер тізімін сақтау (Бұрынғы салынған суреттер жоғалмауы үшін)
-if "saved_images" not in st.session_state:
-    st.session_state.saved_images = []
-
-# Ескі салынған суреттерді экранға тізіп көрсету
-for img in st.session_state.saved_images:
-    st.markdown(f"🔹 **{img['title']}**")
-    st.markdown(img['html'], unsafe_allow_html=True)
-    st.download_button(
-        "📥 Скачать фото", 
-        data=img['bytes'], 
-        file_name="photo.png", 
-        mime="image/png", 
-        key=f"dl_{random.randint(1, 999999)}"
-    )
-    st.markdown("---")
-
-# Жаңа сұраныс енгізу өрісі (Ең астында тұрады)
-user_input = st.chat_input("какой фото хотите делать? (например фото робота,фото машина / БМВ в неоне)...")
-
-if user_input:
-    with st.spinner("подождите он может показатся как логает но нет..."):
-        bytes_data, img_url = draw_image(user_input)
-        
-        if bytes_data:
-            img_html = f'<div class="photo-box"><img src="{img_url}" style="width:100%;"></div>'
+# 🚨 ОРЫСШАЛАНҒАН ЖӘНЕ ҚАТЕСІ ТҮЗЕТІЛГЕН СУРЕТ САЛУ БӨЛІМІ
+        elif any(x in user_input.lower() for x in ["фото", "картинка", "рисунок", "нарисуй", "сурет", "сал"]):
+            topic = user_input.lower()
+            for w in ["фото", "картинку", "рисунок", "нарисуй", "сурет", "сал"]:
+                topic = topic.replace(w, "")
+            topic = topic.strip() or "epic cyber landscape"
             
-            # Жаңа суретті тізімге қосып қоямыз
-            st.session_state.saved_images.append({
-                "title": user_input,
-                "html": img_html,
-                "bytes": bytes_data
-            })
+            # Генерация фото в HD качестве
+            bytes_data, img_url = draw_image(topic)
             
-            # 🔥 МАНЫЗДЫ: Код кептеліп қалмай, келесі суретті де шексіз салу үшін бетті жаңартамыз!
-            st.rerun()
-        else:
-            st.error("Сурет салу сервері жауап бермеді. Қайтадан байқап көрші.")
-            
-# ======================
+            if bytes_data:
+                img_html = f'<div class="photo-box"><img src="{img_url}" style="width:100%;"></div>'
+                
+                # Орысша жауап құрастыру
+                reply = f"🎨 **Вот, {st.session_state.user_name}, твой рисунок готов:** *{topic}*"
+                
+                # Сохраняем картинку в историю чата, чтобы она не исчезала
+                st.session_state.messages.append({
+                    "role": "assistant",
+                    "content": reply,
+                    "img_html": img_html,
+                    "img_bytes": bytes_data
+                })
+                
+                # Выводим на экран
+                st.markdown(reply)
+                st.markdown(img_html, unsafe_allow_html=True)
+                
+                # Кнопка скачивания на русском с уникальным ID (чтобы не было багов)
+                import random
+                st.download_button(
+                    "📥 Скачать фото", 
+                    data=bytes_data, 
+                    file_name="photo.png", 
+                    mime="image/png", 
+                    key=f"dl_{random.randint(1,999999)}"
+                )
+                
+                # 🔥 Перезапуск страницы, чтобы бот не зависал и сразу принимал второй, третий запросы!
+                st.rerun()
+            else:
+                st.error("Ошибка сервера картинок. Попробуй еще раз через секунду.")
+                
 # ДАУЫС (TTS)
 # ======================
 def get_audio(text):
