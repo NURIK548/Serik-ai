@@ -1,4 +1,6 @@
 streamlit
 wikipedia
 requests
-gtts
+gTTS
+SpeechRecognition
+PyAudio
