@@ -1,278 +1,68 @@
 import streamlit as st
-import wikipedia
 import requests
-import re
-import base64
-from gtts import gTTS
-import io
-import random
-import os
 import json
-import difflib  # ТҮЗЕТІЛДІ: Қате жазылған сөздерді тану үшін қосылды
-from requests.utils import quote
+import os
+from urllib.parse import quote
 
-# ======================
-# БАПТАУЛАР
-# ======================
-st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
-wikipedia.set_lang("ru")
-
-DEV_PASSWORD = "nurik777" 
-
-# ======================
-# АҚЫЛДЫ СҰРАҚ-ЖАУАП ЖАДЫ (JSON ФОРМАТ)
-# ======================
+# Конфигурация
 MEMORY_FILE = "memory_base.json"
 
-def load_memory_base():
+# 1. БАЗАНЫ ОҚУ ЖӘНЕ ИКЕМДІ ІЗДЕУ ФУНКЦИЯСЫ
+def get_answer_from_memory(user_input):
     if os.path.exists(MEMORY_FILE):
         try:
             with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data = json.load(f)
+                clean_input = user_input.strip().lower()
+                # Икемді іздеу: сұрақтың ішіндегі кілт сөздерді табады
+                for key in data.keys():
+                    if key in clean_input or clean_input in key:
+                        return data[key]
         except:
-            return {}
-    return {}
-
-def save_to_memory_base(question, answer):
-    base = load_memory_base()
-    base[question.lower().strip()] = answer.strip()
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(base, f, ensure_ascii=False, indent=4)
-
-# ---------------------------------------------------------
-# ТҮЗЕТІЛДІ: ҚАТЕЛЕРДІ ТҮЗЕТІП, ЖАҚЫН СӨЗДІ ТАБУ ФУНКЦИЯСЫ
-# ---------------------------------------------------------
-def find_closest_answer(user_query, memory_base):
-    """Қолданушы қате жазса да, базадан ең ұқсас сұрақты тауып, жауабын қайтарады"""
-    user_query = user_query.lower().strip()
-    
-    # Базадағы бүкіл дайын сұрақтардың тізімі
-    saved_questions = list(memory_base.keys())
-    
-    if not saved_questions:
-        return None
-        
-    # Ең жақын, ұқсас сөзді іздеу (n=1 - ең жақын біреуі, cutoff=0.6 - 60% ұқсастық жеткілікті)
-    closest_matches = difflib.get_close_matches(user_query, saved_questions, n=1, cutoff=0.6)
-    
-    if closest_matches:
-        matched_question = closest_matches[0]
-        # Дәл қазір қаншалықты ұқсас екенін пайызбен есептеу (тексеру үшін)
-        similarity = difflib.SequenceMatcher(None, user_query, matched_question).ratio()
-        
-        # Егер ұқсастық 65%-дан жоғары болса, бот осы сұрақты меңзеп тұр деп шешеді
-        if similarity >= 0.65:
-            return memory_base[matched_question]
-            
+            return None
     return None
 
-# ======================
-# SIDEBAR (ОБОЙ ЖӘНЕ ПАРОЛЬ)
-# ======================
-st.sidebar.title("🎨 Темы оформления")
-bg_option = st.sidebar.selectbox(
-    "Выберите фон для Serik-Ai:",
-    ["Тёмный космос (По умолчанию)", "Киберпанк neon", "Матрица green", "Мягкий серый", "Светлая тема"]
-)
-
-st.sidebar.markdown("---")
-st.sidebar.title("🛠️ Режим Разработчика")
-user_password = st.sidebar.text_input("Введите пароль разработчика:", type="password")
-
-is_developer = (user_password == DEV_PASSWORD)
-
-if is_developer:
-    st.sidebar.success("Доступ разрешен! Вы можете обучать ИИ. ✅")
-else:
-    if user_password:
-        st.sidebar.error("Неверный пароль! Доступ ограничен. ❌")
-
-bg_styles = {
-    "Тёмный космос (По умолчанию)": "background-color: #0e1117; color: white;",
-    "Киберпанк neon": "background: linear-gradient(135deg, #120c1f 0%, #05020a 100%); background-attachment: fixed; color: #00ffcc;",
-    "Матрица green": "background-color: #000000; color: #00ff00; font-family: 'Courier New', monospace;",
-    "Мягкий серый": "background-color: #2b2d42; color: #edf2f4;",
-    "Светлая тема": "background-color: #f8f9fa; color: #212529;"
-}
-
-selected_bg = bg_styles[bg_option]
-
-text_color = "white"
-if bg_option == "Светлая тема":
-    text_color = "#212529"
-elif bg_option == "Матрица green":
-    text_color = "#00ff00"
-elif bg_option == "Киберпанк neon":
-    text_color = "#00ffcc"
-
-# ======================
-# ДИЗАЙН
-# ======================
-st.markdown(f"""
-<style>
-.stApp {{
-    {selected_bg}
-}}
-.stMarkdown, p, h1, h2, h3, span, label {{
-    color: {text_color} !important;
-}}
-.stChatInput textarea {{
-    background-color: #1a1f2c !important;
-    color: white !important;
-    border: 1px solid #3a3f50 !important;
-}}
-</style>
-""", unsafe_allow_html=True)
-
-# ======================
-# ДАУЫС (TTS)
-# ======================
-def get_audio(text):
+# 2. ИНТЕРНЕТ АРҚЫЛЫ ЖАУАП ҚҰРАСТЫРУ
+def chat_with_ai(user_input):
     try:
-        clean_txt = text[:200]
-        clean_txt = re.sub(r'[\U00010000-\U0010ffff]|\u263a|\u263b', '', clean_txt)
-        clean_txt = re.sub(r'[.,\/#!$%\^&\*;:{}=\-_`~()?"\n]', ' ', clean_txt)
-        clean_txt = re.sub(r'\s+', ' ', clean_txt).strip()
-
-        if clean_txt:
-            tts = gTTS(text=clean_txt, lang='ru')
-            fp = io.BytesIO()
-            tts.write_to_fp(fp)
-            fp.seek(0)
-            return fp
-    except:
-        return None
-    return None
-
-# ======================
-# GOOGLE INFO
-# ======================
-def search_google_and_compose(topic):
-    try:
-        search_url = f"https://html.duckduckgo.com/html/?q={quote(topic)}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(search_url, headers=headers, timeout=6)
-        if res.status_code == 200:
-            snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', res.text, re.DOTALL)
-            composed = ""
-            for snip in snippets[:4]:
-                clean = re.sub(r'<[^>]+>', '', snip).strip()
-                composed += clean + " "
-            return composed.strip()
-    except:
-        pass
-    return ""
-
-# ======================
-# ЧАТ МОДЕЛІ
-# ======================
-def chat_with_ai(user_prompt):
-    try:
-        api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Ты+умеешь+поддерживать+любую+беседу+как+ChatGPT+и+Gemini.+Отвечай+всегда+СТРОГО+на+русском+языке+живо+и+интересно."
+        system_instructions = (
+            "Ты — Serik-Ai, интеллектуальный и харизматичный ИИ-ассистент, созданный Нурханом. "
+            "Твой стиль общения: живой, дружелюбный, как у реального человека. "
+            "Всегда общайся только на русском языке. "
+            "Если не знаешь ответа, используй свою логику, чтобы дать полезный и интересный ответ."
+        )
+        api_url = f"https://text.pollinations.ai/{quote(user_input)}?system={quote(system_instructions)}"
         res = requests.get(api_url, timeout=15)
         if res.status_code == 200:
             return res.text.strip()
     except:
         pass
-    return "Я тут, давай поболтаем! О чём думаешь? 😊"
+    return "Я тут, давай поболтаем! 😊"
 
-# ======================
-# SMART CONTENT
-# ======================
-def get_smart_content(q):
-    q_low = q.lower().strip()
+# 3. ИНТЕРФЕЙС ЖӘНЕ НЕГІЗГІ ЛОГИКА
+st.title("Serik-Ai PRO Max")
+st.write("Спроси меня о чем угодно!")
 
-    # Обучение ИИ
-    if q_low.startswith("запомни"):
-        if not is_developer:
-            return "❌ У вас нет прав разработчика для обучения ИИ! Пожалуйста, введите верный пароль в меню слева."
-
-        core_text = q[7:].strip()
-        
-        if " это " in core_text.lower():
-            parts = re.split(r'\s+это\s+', core_text, flags=re.IGNORECASE, maxsplit=1)
-            question_part = parts[0].strip()
-            answer_part = parts[1].strip()
-            
-            if question_part and answer_part:
-                save_to_memory_base(question_part, answer_part)
-                return f"🧠 **[Режим Разработчика]** Я успешно запомнил!\n\n**Вопрос:** {question_part}\n**Ответ:** {answer_part}"
-        
-        return "Пожалуйста, используй формат: **Запомни [вопрос] это [ответ]**"
-
-    # ---------------------------------------------------------
-    # ТҮЗЕТІЛДІ: АҚЫЛДЫ ІЗДЕУ (ҚАТЕЛЕРДІ АВТОМАТТЫ ТҮЗЕТУ)
-    # ---------------------------------------------------------
-    memory_base = load_memory_base()
-    smart_answer = find_closest_answer(q, memory_base)
-    
-    if smart_answer:
-        return smart_answer  # Егер сұрақ қате болса да ұқсас нұсқасы табылса, жауап береді
-
-    # Ескі фаст-жауаптар
-    fast_answers = {
-        "кто тебя создал": "Меня создал Нурхан"
-    }
-
-    if q_low in fast_answers:
-        return fast_answers[q_low]
-
-    # Реферат пен эссе жүйесі
-    if "реферат" in q_low or "эссе" in q_low:
-        topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
-        wiki_summary = ""
-        wiki_content = ""
-        try:
-            page = wikipedia.page(topic)
-            wiki_summary = page.summary
-            wiki_content = page.content
-        except:
-            pass
-
-        google_data = search_google_and_compose(topic)
-        main = wiki_summary if wiki_summary else google_data
-
-        if "реферат" in q_low and main:
-            return f"РЕФЕРАТ: {topic}\n\nВведение:\n{main}\n\nОсновная часть:\n{wiki_content[:1500] if wiki_content else google_data}\n\nЗаключение:\nАнализ показывает важность темы."
-        elif "эссе" in q_low and main:
-            return f"ЭССЕ: {topic}\n\nАнализ:\n{main}\n\nВывод: тема актуальна и интересна."
-
-    return chat_with_ai(q)
-
-# ======================
-# CHAT INIT
-# ======================
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    welcome = "Привет! Я Serik-AI PRO Max. Как дела? О чём поговорим сегодня?"
-    st.session_state.messages.append({"role": "assistant", "content": welcome})
 
-# ======================
-# DISPLAY CHAT
-# ======================
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+# Чат тарихын көрсету
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
-# ======================
-# INPUT
-# ======================
-prompt = st.chat_input("Напиши запрос...")
-
-if prompt:
-    st.session_state.messages.append({"role": "user", "content": prompt})
-
+# Қолданушы сұрауы
+if user_input := st.chat_input("Твое сообщение..."):
+    st.session_state.messages.append({"role": "user", "content": user_input})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(user_input)
 
     with st.chat_message("assistant"):
-        with st.spinner("Думаю..."):
-            text = get_smart_content(prompt)
-
-        st.markdown(text)
-
-        audio = get_audio(text)
-        if audio:
-            st.audio(audio, format="audio/mp3")
-
-        st.session_state.messages.append({"role": "assistant", "content": text})
+        # Ақылды логика: алдымен база, жоқ болса интернет
+        answer = get_answer_from_memory(user_input)
+        
+        if not answer:
+            answer = chat_with_ai(user_input)
+            
+        st.markdown(answer)
+        st.session_state.messages.append({"role": "assistant", "content": answer})
