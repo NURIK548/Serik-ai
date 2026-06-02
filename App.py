@@ -131,7 +131,7 @@ for img in st.session_state.saved_images:
 user_input = st.chat_input("какой фото хотите делать? (например фото робота,фото машина / БМВ в неоне)...")
 
 if user_input:
-    with st.spinner("Сурет салынып жатыр, күте тұр..."):
+    with st.spinner("подождите он может показатся как логает но нет..."):
         bytes_data, img_url = draw_image(user_input)
         
         if bytes_data:
