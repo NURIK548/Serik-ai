@@ -128,7 +128,7 @@ for img in st.session_state.saved_images:
     st.markdown("---")
 
 # Жаңа сұраныс енгізу өрісі (Ең астында тұрады)
-user_input = st.chat_input("Қандай сурет саламыз? (Мысалы: Мерседес бандитский / БМВ в неоне)...")
+user_input = st.chat_input("какой фото хотите делать? (например фото робота,фото машина / БМВ в неоне)...")
 
 if user_input:
     with st.spinner("Сурет салынып жатыр, күте тұр..."):
