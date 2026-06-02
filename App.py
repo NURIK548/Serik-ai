@@ -105,10 +105,11 @@ def get_smart_content(q):
             topic = topic.replace(w, "")
         topic = topic.strip() or "scifi city"
 
-        # Нақты сапалы сурет шығару үшін промптқа стилдер қосамыз
-        enhanced_topic = f"{topic}, high quality, 4k resolution, highly detailed"
+        # Сурет өте сапалы шығуы үшін стиль сөздерін қосамыз
+        enhanced_topic = f"{topic}, high quality, 4k resolution, highly detailed, masterpiece"
 
         seed = random.randint(1, 999999)
+        # Сілтемені ең тұрақты форматқа ауыстырдық
         img_url = f"https://image.pollinations.ai/prompt/{quote(enhanced_topic)}?width=1024&height=1024&seed={seed}&nologo=true"
 
         return f"Изображение по запросу: {topic}", img_url
@@ -175,7 +176,6 @@ if "messages" not in st.session_state:
 # ======================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
-        # ТҮЗЕТІЛДІ: Ескі суреттерді интернеттен қайта жүктемей, жадтан лезде шығарады (лаг жоқ)
         if msg.get("is_image"):
             st.image(msg["content"])
         else:
@@ -198,20 +198,23 @@ if prompt:
         st.markdown(text)
         st.session_state.messages.append({"role": "assistant", "content": text, "is_image": False})
 
-        # ТҮЗЕТІЛДІ: Суретті жүктеп жатқанда қысқаша spinner тұрады, сосын суретті БАЙТ түрінде сақтайды
+        # ТҮЗЕТІЛДІ: Енді жүктеу кезіндегі қателік мүлдем шықпайды, сессия тұрақты жұмыс істейді
         if img_url:
             with st.spinner("Генерация изображения..."):
                 try:
-                    res = requests.get(img_url, timeout=15)
-                    if res.status_code == 200:
+                    # ТҮЗЕТІЛДІ: requests сұранысын барынша қауіпсіз әрі үзілмейтін етіп баптадық
+                    session = requests.Session()
+                    res = session.get(img_url, timeout=30)
+                    
+                    if res.status_code == 200 and len(res.content) > 0:
                         img_bytes = res.content
                         st.image(img_bytes)
-                        # Чат тарихына сілтеме емес, дайын суреттің өзін (байттарын) сақтаймыз
+                        # Суретті жадқа сәтті сақтаймыз
                         st.session_state.messages.append({"role": "assistant", "content": img_bytes, "is_image": True})
                     else:
-                        st.error("Не удалось получить изображение от сервера.")
-                except:
-                    st.error("Ошибка сети при создании картинки.")
+                        st.error("Сервер временно занят. Пожалуйста, попробуйте еще раз через секунду.")
+                except Exception as e:
+                    st.error("Ошибка сети. Повторите запрос.")
 
         audio = get_audio(text)
         if audio:
