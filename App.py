@@ -8,19 +8,19 @@ import io
 import random
 import os
 import json
-import difflib
+import difflib  # ТҮЗЕТІЛДІ: Қате жазылған сөздерді тану үшін қосылды
 from requests.utils import quote
-import speech_recognition as sr  # ЖАНА: Дауысты тану үшін
 
 # ======================
-# БАПТАУЛАР ЖӘНЕ ПАРОЛЬ
+# БАПТАУЛАР
 # ======================
-st.set_page_config(page_title="Serik-Ai PRO Max Ultra", layout="wide")
+st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 wikipedia.set_lang("ru")
+
 DEV_PASSWORD = "nurik777" 
 
 # ======================
-# АҚЫЛДЫ СҰРАҚ-ЖАУАП БАЗАСЫ (JSON)
+# АҚЫЛДЫ СҰРАҚ-ЖАУАП ЖАДЫ (JSON ФОРМАТ)
 # ======================
 MEMORY_FILE = "memory_base.json"
 
@@ -39,48 +39,35 @@ def save_to_memory_base(question, answer):
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(base, f, ensure_ascii=False, indent=4)
 
-def delete_from_memory(question):
-    base = load_memory_base()
-    if question in base:
-        del base[question]
-        with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(base, f, ensure_ascii=False, indent=4)
-        return True
-    return False
-
+# ---------------------------------------------------------
+# ТҮЗЕТІЛДІ: ҚАТЕЛЕРДІ ТҮЗЕТІП, ЖАҚЫН СӨЗДІ ТАБУ ФУНКЦИЯСЫ
+# ---------------------------------------------------------
 def find_closest_answer(user_query, memory_base):
+    """Қолданушы қате жазса да, базадан ең ұқсас сұрақты тауып, жауабын қайтарады"""
     user_query = user_query.lower().strip()
+    
+    # Базадағы бүкіл дайын сұрақтардың тізімі
     saved_questions = list(memory_base.keys())
+    
     if not saved_questions:
         return None
+        
+    # Ең жақын, ұқсас сөзді іздеу (n=1 - ең жақын біреуі, cutoff=0.6 - 60% ұқсастық жеткілікті)
     closest_matches = difflib.get_close_matches(user_query, saved_questions, n=1, cutoff=0.6)
+    
     if closest_matches:
         matched_question = closest_matches[0]
+        # Дәл қазір қаншалықты ұқсас екенін пайызбен есептеу (тексеру үшін)
         similarity = difflib.SequenceMatcher(None, user_query, matched_question).ratio()
+        
+        # Егер ұқсастық 65%-дан жоғары болса, бот осы сұрақты меңзеп тұр деп шешеді
         if similarity >= 0.65:
             return memory_base[matched_question]
+            
     return None
 
 # ======================
-# ЖАҢА: ДАУЫСТЫ ТЫҢДАУ ЖӘНЕ ОЯНУ (WAKE WORD)
-# ======================
-def listen_for_wake_word():
-    """Микрофонды қосып, 'Серик' деген сөзді күтеді"""
-    recognizer = sr.Recognizer()
-    with sr.Microphone() as source:
-        # Айналадағы артық шуды басу
-        recognizer.adjust_for_ambient_noise(source, duration=0.5)
-        try:
-            # 3 секунд ішінде дыбыс жазып алады
-            audio = recognizer.listen(source, timeout=3, phrase_time_limit=4)
-            # Орыс және қазақ тіліндегі дыбысты мәтінге айналдыру
-            text = recognizer.recognize_google(audio, language="ru-RU").lower().strip()
-            return text
-        except:
-            return ""
-
-# ======================
-# SIDEBAR МӘЗІРІ ЖӘНЕ ФУНКЦИЯЛАР
+# SIDEBAR (ОБОЙ ЖӘНЕ ПАРОЛЬ)
 # ======================
 st.sidebar.title("🎨 Темы оформления")
 bg_option = st.sidebar.selectbox(
@@ -88,39 +75,18 @@ bg_option = st.sidebar.selectbox(
     ["Тёмный космос (По умолчанию)", "Киберпанк neon", "Матрица green", "Мягкий серый", "Светлая тема"]
 )
 
-# ФАЙЛДАРДЫ ТАЛДАУ
 st.sidebar.markdown("---")
-st.sidebar.title("📁 Анализ документов (.txt)")
-uploaded_file = st.sidebar.file_uploader("Загрузите текстовый файл:", type=["txt"])
-file_context = ""
-if uploaded_file is not None:
-    try:
-        file_context = uploaded_file.read().decode("utf-8")
-        st.sidebar.success("Файл успешно загружен! 📄")
-    except:
-        st.sidebar.error("Не удалось прочитать файл.")
-
-# РАЗРАБОТЧИК ПАНЕЛІ
-st.sidebar.markdown("---")
-st.sidebar.title("🛠️ Панель Разработчика")
+st.sidebar.title("🛠️ Режим Разработчика")
 user_password = st.sidebar.text_input("Введите пароль разработчика:", type="password")
+
 is_developer = (user_password == DEV_PASSWORD)
 
 if is_developer:
-    st.sidebar.success("Доступ разрешен! ✅")
-    st.sidebar.subheader("🗄️ Управление базой памяти:")
-    current_base = load_memory_base()
-    if current_base:
-        for q_key in list(current_base.keys()):
-            col1, col2 = st.sidebar.columns([3, 1])
-            col1.write(f"**Q:** {q_key}\n**A:** {current_base[q_key]}")
-            if col2.button("❌", key=f"del_{q_key}"):
-                delete_from_memory(q_key)
-                st.rerun()
-    else:
-        st.sidebar.info("База данных пока пуста.")
+    st.sidebar.success("Доступ разрешен! Вы можете обучать ИИ. ✅")
+else:
+    if user_password:
+        st.sidebar.error("Неверный пароль! Доступ ограничен. ❌")
 
-# Дизайн
 bg_styles = {
     "Тёмный космос (По умолчанию)": "background-color: #0e1117; color: white;",
     "Киберпанк neon": "background: linear-gradient(135deg, #120c1f 0%, #05020a 100%); background-attachment: fixed; color: #00ffcc;",
@@ -128,10 +94,35 @@ bg_styles = {
     "Мягкий серый": "background-color: #2b2d42; color: #edf2f4;",
     "Светлая тема": "background-color: #f8f9fa; color: #212529;"
 }
-selected_bg = bg_styles[bg_option]
-text_color = "white" if bg_option != "Светлая тема" else "#212529"
 
-st.markdown(f"<style>.stApp {{{selected_bg}}} .stMarkdown, p, h1, h2, h3, span, label {{color: {text_color} !important;}}</style>", unsafe_allow_html=True)
+selected_bg = bg_styles[bg_option]
+
+text_color = "white"
+if bg_option == "Светлая тема":
+    text_color = "#212529"
+elif bg_option == "Матрица green":
+    text_color = "#00ff00"
+elif bg_option == "Киберпанк neon":
+    text_color = "#00ffcc"
+
+# ======================
+# ДИЗАЙН
+# ======================
+st.markdown(f"""
+<style>
+.stApp {{
+    {selected_bg}
+}}
+.stMarkdown, p, h1, h2, h3, span, label {{
+    color: {text_color} !important;
+}}
+.stChatInput textarea {{
+    background-color: #1a1f2c !important;
+    color: white !important;
+    border: 1px solid #3a3f50 !important;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # ======================
 # ДАУЫС (TTS)
@@ -142,6 +133,7 @@ def get_audio(text):
         clean_txt = re.sub(r'[\U00010000-\U0010ffff]|\u263a|\u263b', '', clean_txt)
         clean_txt = re.sub(r'[.,\/#!$%\^&\*;:{}=\-_`~()?"\n]', ' ', clean_txt)
         clean_txt = re.sub(r'\s+', ' ', clean_txt).strip()
+
         if clean_txt:
             tts = gTTS(text=clean_txt, lang='ru')
             fp = io.BytesIO()
@@ -153,7 +145,7 @@ def get_audio(text):
     return None
 
 # ======================
-# ЖАНДЫ ИНТЕРНЕТ
+# GOOGLE INFO
 # ======================
 def search_google_and_compose(topic):
     try:
@@ -174,41 +166,60 @@ def search_google_and_compose(topic):
 # ======================
 # ЧАТ МОДЕЛІ
 # ======================
-def chat_with_ai(user_prompt, doc_context=""):
+def chat_with_ai(user_prompt):
     try:
-        context_instruction = f" Текст загруженного документа: '{doc_context}'." if doc_context else ""
-        api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Отвечай+всегда+СТРОГО+на+русском+языке+живо.+{quote(context_instruction)}"
+        api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Ты+умеешь+поддерживать+любую+беседу+как+ChatGPT+и+Gemini.+Отвечай+всегда+СТРОГО+на+русском+языке+живо+и+интересно."
         res = requests.get(api_url, timeout=15)
         if res.status_code == 200:
             return res.text.strip()
     except:
         pass
-    return "Я тут, давай поболтаем! 😊"
+    return "Я тут, давай поболтаем! О чём думаешь? 😊"
 
 # ======================
-# SMART CONTENT МЕНЕДЖЕР
+# SMART CONTENT
 # ======================
-def get_smart_content(q, doc_context=""):
+def get_smart_content(q):
     q_low = q.lower().strip()
 
+    # Обучение ИИ
     if q_low.startswith("запомни"):
         if not is_developer:
-            return "❌ У вас нет прав разработчика для обучения ИИ! Введите верный пароль слева."
+            return "❌ У вас нет прав разработчика для обучения ИИ! Пожалуйста, введите верный пароль в меню слева."
+
         core_text = q[7:].strip()
+        
         if " это " in core_text.lower():
             parts = re.split(r'\s+это\s+', core_text, flags=re.IGNORECASE, maxsplit=1)
             question_part = parts[0].strip()
             answer_part = parts[1].strip()
+            
             if question_part and answer_part:
                 save_to_memory_base(question_part, answer_part)
                 return f"🧠 **[Режим Разработчика]** Я успешно запомнил!\n\n**Вопрос:** {question_part}\n**Ответ:** {answer_part}"
+        
         return "Пожалуйста, используй формат: **Запомни [вопрос] это [ответ]**"
 
+    # ---------------------------------------------------------
+    # ТҮЗЕТІЛДІ: АҚЫЛДЫ ІЗДЕУ (ҚАТЕЛЕРДІ АВТОМАТТЫ ТҮЗЕТУ)
+    # ---------------------------------------------------------
     memory_base = load_memory_base()
     smart_answer = find_closest_answer(q, memory_base)
+    
     if smart_answer:
-        return smart_answer
+        return smart_answer  # Егер сұрақ қате болса да ұқсас нұсқасы табылса, жауап береді
 
+    # Ескі фаст-жауаптар
+    fast_answers = {
+        "привет": "Привет! Я Serik-AI PRO Max готов к работе.",
+        "как дела": "Отлично! Всё работает стабильно.",
+        "кто тебя создал": "Меня создал Нурхан"
+    }
+
+    if q_low in fast_answers:
+        return fast_answers[q_low]
+
+    # Реферат пен эссе жүйесі
     if "реферат" in q_low or "эссе" in q_low:
         topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
         wiki_summary = ""
@@ -219,77 +230,51 @@ def get_smart_content(q, doc_context=""):
             wiki_content = page.content
         except:
             pass
+
         google_data = search_google_and_compose(topic)
         main = wiki_summary if wiki_summary else google_data
+
         if "реферат" in q_low and main:
             return f"РЕФЕРАТ: {topic}\n\nВведение:\n{main}\n\nОсновная часть:\n{wiki_content[:1500] if wiki_content else google_data}\n\nЗаключение:\nАнализ показывает важность темы."
         elif "эссе" in q_low and main:
             return f"ЭССЕ: {topic}\n\nАнализ:\n{main}\n\nВывод: тема актуальна и интересна."
 
-    return chat_with_ai(q, doc_context)
+    return chat_with_ai(q)
 
 # ======================
-# CHAT INTERFACE
+# CHAT INIT
 # ======================
-st.title("🤖 Serik-Ai PRO Max Ultra")
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    st.session_state.messages.append({"role": "assistant", "content": "Привет! Назови моё имя 'Серик', чтобы я включился и ответил!"})
+    welcome = "Привет! Я Serik-AI PRO Max. Как дела? О чём поговорим сегодня?"
+    st.session_state.messages.append({"role": "assistant", "content": welcome})
 
+# ======================
+# DISPLAY CHAT
+# ======================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# ---------------------------------------------------------
-# ЖАҢА: АТЫН АТАҒАНДА ОЯНУ ЖҮЙЕСІНІҢ ИНТЕРФЕЙСІ
-# ---------------------------------------------------------
-st.write("---")
-col_btn, col_status = st.columns([1, 4])
+# ======================
+# INPUT
+# ======================
+prompt = st.chat_input("Напиши запрос...")
 
-# Ояту режимін іске қосу батырмасы
-start_listening = col_btn.button("Включить режим 'Голосовой Серик' 📡")
-
-prompt = ""
-
-if start_listening:
-    col_status.warning("Слушаю... Скажи громко: 'Серик ... [твой вопрос]' 🎙️")
-    
-    # Дауысты фонда тыңдаймыз
-    voice_input = listen_for_wake_word()
-    
-    if voice_input:
-        col_status.info(f"Распознано: '{voice_input}'")
-        
-        # Егер қолданушының сөзінде "серик" деген есім болса
-        if "серик" in voice_input:
-            # "серик" деген сөзді алып тастап, тек сұрақтың өзін қалдырамыз
-            prompt = voice_input.replace("серик", "").strip()
-            if not prompt:
-                prompt = "Привет"  # Егер жай ғана атын атаса, привет деп жауап береді
-        else:
-            col_status.error("Вы не назвали имя 'Серик'. Попробуйте еще раз.")
-    else:
-        col_status.error("Ничего не услышал. Повторите громче.")
-
-# Кәдімгі мәтінмен жазу жолағы да қатар жұмыс істей береді
-text_prompt = st.chat_input("Или напиши запрос сюда вручную...")
-if text_prompt:
-    prompt = text_prompt
-
-# Жауап беру бөлімі
 if prompt:
     st.session_state.messages.append({"role": "user", "content": prompt})
+
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        with st.spinner("Серик думает..."):
-            text = get_smart_content(prompt, file_context)
+        with st.spinner("Думаю..."):
+            text = get_smart_content(prompt)
+
         st.markdown(text)
-        
+
         audio = get_audio(text)
         if audio:
-            st.audio(audio, format="audio/mp3", autoplay=True) # ЖАҢА: autoplay=True арқылы дауыс бірден автоматты шығады
-            
+            st.audio(audio, format="audio/mp3")
+
         st.session_state.messages.append({"role": "assistant", "content": text})
