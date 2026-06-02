@@ -6,6 +6,8 @@ import base64
 from gtts import gTTS
 import io
 import random
+import os
+import json
 from requests.utils import quote
 
 # ======================
@@ -14,8 +16,31 @@ from requests.utils import quote
 st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 wikipedia.set_lang("ru")
 
+# РАЗРАБОТЧИК ПАРОЛІ (Осы жерден парольді ауыстыруға болады)
+DEV_PASSWORD = "nurik777" 
+
 # ======================
-# ОБОЙ ТАҢДАУ (SIDEBAR)
+# АҚЫЛДЫ СҰРАҚ-ЖАУАП ЖАДЫ (JSON ФОРМАТ)
+# ======================
+MEMORY_FILE = "memory_base.json"
+
+def load_memory_base():
+    if os.path.exists(MEMORY_FILE):
+        try:
+            with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except:
+            return {}
+    return {}
+
+def save_to_memory_base(question, answer):
+    base = load_memory_base()
+    base[question.lower().strip()] = answer.strip()
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(base, f, ensure_ascii=False, indent=4)
+
+# ======================
+# SIDEBAR (ОБОЙ ЖӘНЕ ПАРОЛЬ)
 # ======================
 st.sidebar.title("🎨 Темы оформления")
 bg_option = st.sidebar.selectbox(
@@ -23,6 +48,21 @@ bg_option = st.sidebar.selectbox(
     ["Тёмный космос (По умолчанию)", "Киберпанк neon", "Матрица green", "Мягкий серый", "Светлая тема"]
 )
 
+# ТҮЗЕТІЛДІ: Разработчик режимін тексеруге арналған құпия сөз енгізу жолы
+st.sidebar.markdown("---")
+st.sidebar.title("🛠️ Режим Разработчика")
+user_password = st.sidebar.text_input("Введите пароль разработчика:", type="password")
+
+# Пароль дұрыс па, тексеру
+is_developer = (user_password == DEV_PASSWORD)
+
+if is_developer:
+    st.sidebar.success("Доступ разрешен! Вы можете обучать ИИ. ✅")
+else:
+    if user_password:
+        st.sidebar.error("Неверный пароль! Доступ ограничен. ❌")
+
+# Дизайн стильдері
 bg_styles = {
     "Тёмный космос (По умолчанию)": "background-color: #0e1117; color: white;",
     "Киберпанк neon": "background: linear-gradient(135deg, #120c1f 0%, #05020a 100%); background-attachment: fixed; color: #00ffcc;",
@@ -61,18 +101,13 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ======================
-# ДАУЫС (TTS) - СМАЙЛИК ПЕН НҮКТЕЛЕР ОҚЫЛМАЙДЫ
+# ДАУЫС (TTS)
 # ======================
 def get_audio(text):
     try:
         clean_txt = text[:200]
-        
-        # ТҮЗЕТІЛДІ: Смайликтерді (Emoji) мәтіннен толық өшіру
         clean_txt = re.sub(r'[\U00010000-\U0010ffff]|\u263a|\u263b', '', clean_txt)
-        
-        # ТҮЗЕТІЛДІ: Нүкте, үтір және басқа тыныс белгілерін дыбыстамау үшін бос орынға ауыстыру
         clean_txt = re.sub(r'[.,\/#!$%\^&\*;:{}=\-_`~()?"\n]', ' ', clean_txt)
-        
         clean_txt = re.sub(r'\s+', ' ', clean_txt).strip()
 
         if clean_txt:
@@ -109,7 +144,6 @@ def search_google_and_compose(topic):
 # ======================
 def chat_with_ai(user_prompt):
     try:
-        # ТҮЗЕТІЛДІ: Тек қана орыс тілінде еркін әңгімелесу нұсқауы берілді
         api_url = f"https://text.pollinations.ai/{quote(user_prompt)}?system=Ты+интеллектуальный+ассистент+Serik-AI+созданный+Нурханом.+Ты+умеешь+поддерживать+любую+беседу+как+ChatGPT+и+Gemini.+Отвечай+всегда+СТРОГО+на+русском+языке+живо+и+интересно."
         res = requests.get(api_url, timeout=15)
         if res.status_code == 200:
@@ -119,11 +153,38 @@ def chat_with_ai(user_prompt):
     return "Я тут, давай поболтаем! О чём думаешь? 😊"
 
 # ======================
-# SMART CONTENT (ЕСКІ НҰСҚА ҚАЛПЫНА КЕЛТІРІЛДІ)
+# SMART CONTENT
 # ======================
 def get_smart_content(q):
     q_low = q.lower().strip()
 
+    # ---------------------------------------------------------
+    # ТҮЗЕТІЛДІ: РАЗРАБОТЧИК ПРАВОСЫН ТЕКСЕРУ АРҚЫЛЫ САКТАУ
+    # ---------------------------------------------------------
+    if q_low.startswith("запомни"):
+        # Егер қолданушы пароль енгізбесе немесе қате енгізсе, үйретуге рұқсат бермейді
+        if not is_developer:
+            return "❌ У вас нет прав разработчика для обучения ИИ! Пожалуйста, введите верный пароль в меню слева."
+
+        core_text = q[7:].strip()
+        
+        if " это " in core_text.lower():
+            parts = re.split(r'\s+это\s+', core_text, flags=re.IGNORECASE, maxsplit=1)
+            question_part = parts[0].strip()
+            answer_part = parts[1].strip()
+            
+            if question_part and answer_part:
+                save_to_memory_base(question_part, answer_part)
+                return f"🧠 **[Режим Разработчика]** Я успешно запомнил!\n\n**Вопрос:** {question_part}\n**Ответ:** {answer_part}"
+        
+        return "Пожалуйста, используй формат: **Запомни [вопрос] это [ответ]**"
+
+    # Сұрақ базада бар ма, тексеру (Бұны кез келген қолданушы көре алады)
+    memory_base = load_memory_base()
+    if q_low in memory_base:
+        return memory_base[q_low]
+
+    # Ескі фаст-жауаптар
     fast_answers = {
         "привет": "Привет! Я Serik-AI PRO Max готов к работе.",
         "как дела": "Отлично! Всё работает стабильно.",
@@ -133,53 +194,27 @@ def get_smart_content(q):
     if q_low in fast_answers:
         return fast_answers[q_low]
 
-    # ТҮЗЕТІЛДІ: Егер қолданушы жай ғана сөйлесіп жатса (реферат/эссе демесе), бірден ЧАТ режим қосылады
-    if "реферат" not in q_low and "эссе" not in q_low:
-        return chat_with_ai(q)
+    # Реферат пен эссе жүйесі
+    if "реферат" in q_low or "эссе" in q_low:
+        topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
+        wiki_summary = ""
+        wiki_content = ""
+        try:
+            page = wikipedia.page(topic)
+            wiki_summary = page.summary
+            wiki_content = page.content
+        except:
+            pass
 
-    # НАҚТЫ ЕСКІ ОРИГИНАЛ КОД (ЕШҚАНДАЙ ӨЗГЕРІССІЗ РЕФЕРАТ ПЕН ЭССЕ БӨЛІМІ)
-    topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "").strip()
+        google_data = search_google_and_compose(topic)
+        main = wiki_summary if wiki_summary else google_data
 
-    wiki_summary = ""
-    wiki_content = ""
+        if "реферат" in q_low and main:
+            return f"РЕФЕРАТ: {topic}\n\nВведение:\n{main}\n\nОсновная часть:\n{wiki_content[:1500] if wiki_content else google_data}\n\nЗаключение:\nАнализ показывает важность темы."
+        elif "эссе" in q_low and main:
+            return f"ЭССЕ: {topic}\n\nАнализ:\n{main}\n\nВывод: тема актуальна и интересна."
 
-    try:
-        page = wikipedia.page(topic)
-        wiki_summary = page.summary
-        wiki_content = page.content
-    except:
-        pass
-
-    google_data = search_google_and_compose(topic)
-
-    if not wiki_summary and not google_data:
-        return chat_with_ai(q)
-
-    main = wiki_summary if wiki_summary else google_data
-
-    if "реферат" in q_low:
-        text = f"""РЕФЕРАТ: {topic}
-
-Введение:
-{main}
-
-Основная часть:
-{wiki_content[:1500] if wiki_content else google_data}
-
-Заключение:
-Анализ показывает важность темы."""
-        return text
-
-    if "эссе" in q_low:
-        text = f"""ЭССЕ: {topic}
-
-Анализ:
-{main}
-
-Вывод: тема актуальна и интересна."""
-        return text
-
-    return main
+    return chat_with_ai(q)
 
 # ======================
 # CHAT INIT
