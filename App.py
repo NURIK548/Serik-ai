@@ -1,22 +1,24 @@
 import streamlit as st
-import wikipedia
 import requests
 import re
 import random
+import io
+from gtts import gTTS  # Дауыс беру кітапханасы қайта қосылды
 from requests.utils import quote
 
 # ======================
-# НАСТРОЙКИ СЕССИИ
+# НАСТРОЙКИ СЕССИИ ЖУРНАЛА
 # ======================
 st.set_page_config(page_title="Serik-Ai PRO Max", layout="wide")
 
-# Сессиялық жадты ретке келтіру (Қатесіз жұмыс істеу үшін)
+if "user_name" not in st.session_state:
+    st.session_state.user_name = None
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
-    # Алғашқы сәлемдесу
     st.session_state.messages.append({
         "role": "assistant", 
-        "content": "👋 Привет! Мен Серік-Ай PRO Max! Қазақша және орысша түсінемін. Реферат, эссе жазып, сапалы HD суреттер сала аламын!"
+        "content": "👋 Ооо, сәлем! Мен Серік-Ай! Алдымен атыңды айтшы, 😊"
     })
 
 # ======================
@@ -49,58 +51,38 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================
-# ТІЛДІ АНЫҚТАУ ЖӘНЕ МӘТІН ТАЗАЛАУ
+# ТІЛДІ АНЫҚТАУ ФУНКЦИЯСЫ (Аудио үшін)
 # ======================
-def detect_language(text):
-    # Қазақша әріптер кездессе, тілді қазақша деп ажыратамыз
+def detect_text_language(text):
+    # Қазақша ерекше әріптерді іздеу
     kz_chars = re.compile(r'[ӘәҒғҚқҢңӨөҰұҮүҺһІі]')
     if kz_chars.search(text):
         return "kk"
-    # Егер қазақша әріптер болмаса, бірақ жиі кездесетін сөздер болса
-    kz_words = ["істе", "жаз", "сурет", "қыл", "құра", "бала", "мен", "сен", "болды"]
-    if any(word in text.lower() for word in kz_words):
-        return "kk"
     return "ru"
 
-def clean_and_translate_for_ai(prompt_text):
-    """ Қате жазылған сөздерді тазалап, нейрожеліге ыңғайлау """
-    clean_text = prompt_text.lower()
-    replacements = {
-        "істецді": "сделай", "түсінеьін": "понимай", "интенрнеттен": "интернет",
-        "фотонвң": "фото", "качествасын": "качество", "скачатт": "скачать"
-    }
-    for bad, good in replacements.items():
-        clean_text = clean_text.replace(bad, good)
-    return clean_text
-
 # ======================
-# ИНТЕРНЕТТЕН ІЗДЕУ (DUCKDUCKGO)
+# СӨЙЛЕУ / АУДИО ЖҮЙЕСІ (TTS)
 # ======================
-def search_internet(topic):
+def get_audio(text, lang):
     try:
-        search_url = f"https://html.duckduckgo.com/html/?q={quote(topic)}"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        res = requests.get(search_url, headers=headers, timeout=6)
-
-        if res.status_code == 200:
-            snippets = re.findall(r'<a class="result__snippet".*?>(.*?)</a>', res.text, re.DOTALL)
-            composed = ""
-            for snip in snippets[:4]:
-                clean = re.sub(r'<[^>]+>', '', snip).strip()
-                composed += clean + " "
-            return composed.strip()
+        # Смайликтерді (emoji) тазалау, gTTS оларды оқып қателеспеуі үшін
+        clean_txt = re.sub(r'[^\w\s,.!?—\-]', '', text)
+        clean_txt = clean_txt[:250] # Тым ұзақ болса, тек басын оқиды
+        
+        tts = gTTS(text=clean_txt, lang=lang)
+        fp = io.BytesIO()
+        tts.write_to_fp(fp)
+        fp.seek(0)
+        return fp
     except:
-        pass
-    return ""
+        return None
 
 # ======================
-# ТҰРАҚТЫ СУРЕТ ГЕНЕРАТОРЫ (Қатпайды, 1024x1024 HD)
+# СУРЕТ ГЕНЕРАТОРЫ (HD)
 # ======================
 def generate_hd_image(prompt_text):
-    # Суретті әдемі қылатын нейрожелілік кілт сөздер
-    hd_enhancers = ", 8k resolution, highly detailed, masterpiece, cinematic lighting, photorealistic, trending on artstation"
+    hd_enhancers = ", 8k resolution, highly detailed, masterpiece, cinematic lighting, photorealistic"
     full_prompt = prompt_text + hd_enhancers
-    
     seed = random.randint(1, 999999)
     img_url = f"https://image.pollinations.ai/p/{quote(full_prompt)}?width=1024&height=1024&seed={seed}&nofeed=true"
     
@@ -113,126 +95,70 @@ def generate_hd_image(prompt_text):
     return None, None
 
 # ======================
-# АҚЫЛДЫ МӘТІН ҚҰРАСТЫРУШЫ (ҚАЗАҚША / ОРЫСША)
+# НАҒЫЗ ЖИ ЖҮЙЕСІ (DuckDuckGo AI шлюзі)
 # ======================
-def compose_smart_text(q, topic, main_info, lang):
-    q_low = q.lower()
-    clean_info = re.sub(r'\s+', ' ', main_info).strip()
-    if len(clean_info) < 50:
-        clean_info = f"Информация по теме {topic} из открытых источников." if lang == "ru" else f"{topic} тақырыбы бойынша интернеттен алынған мәлімет."
-
-    if "реферат" in q_low:
-        if lang == "kk":
-            return f"""**Тақырыбы: "{topic.upper()}" РЕФЕРАТЫ**
-
----
-### 1. КІРІСПЕ
-Қазіргі таңда "{topic}" мәселесін зерттеу өте өзекті болып табылады. Бұл бағыттағы жұмыстар қоғам мен ғылым үшін маңызды рөл атқарады. Интернет деректеріне сүйенсек: {clean_info[:400]}...
-
-### 2. НЕГІЗГІ БӨЛІМ
-"{topic}" тақырыбының ішкі құрылымы мен негізгі ерекшеліктеріне тоқталатын болсақ, бұл құбылыс көптеген факторлармен байланысты. Жиналған мәліметтер оның жан-жақты дамып жатқанын көрсетеді.
-
-### 3. ҚОРЫТЫНДЫ
-Жүргізілген талдау жұмыстары қорытындылай келе, "{topic}" тақырыбы болашақта әлі де тереңірек зерттеуді қажет ететінін дәлелдейді."""
-        else:
-            return f"""**Тема: РЕФЕРАТ НА ТЕМУ "{topic.upper()}"**
-
----
-### 1. ВВЕДЕНИЕ
-В современном мире изучение темы "{topic}" занимает важное место. Актуальность данного исследования продиктована изменениями в структуре рассматриваемого вопроса. На основе собранных данных: {clean_info[:400]}...
-
-### 2. ОСНОВНАЯ ЧАСТЬ
-Рассматривая детально аспекты '{topic}', стоит обратить внимание на важные теоретические и практические факторы, влияющие на развитие данной сферы.
-
-### 3. ЗАКЛЮЧЕНИЕ
-Таким образом, проведенный анализ темы "{topic}" позволяет сделать вывод, что данное направление открывает новые перспективы для понимания проблематики."""
-
-    elif "эссе" in q_low:
-        if lang == "kk":
-            return f"""**Тақырыбы: "{topic.upper()}" ЕССЕ**
-
----
-### Менің көзқарасым
-"{topic}" туралы ойланғанда, біз жиі әртүрлі пікірлерді кездестіреміз. Менің ойымша, бұл мәселеге байыппен қарау керек. Мәліметтерге қарасақ: {clean_info[:400]}...
-
-### Талдау мен дәлелдер
-Бұл тақырып тек теориялық емес, өмірлік маңызы бар процесс. Біз оның даму бағытын дұрыс түсінуіміз керек.
-
-### Түйін
-Қорыта айтқанда, "{topic}" — бұл біздің бүгініміз бен болашағымызға тікелей әсер ететін маңызды құбылыс."""
-        else:
-            return f"""**Тема: ЭССЕ НА ТЕМУ "{topic.upper()}"**
-
----
-### Личное размышление
-Задумываясь над темой "{topic}", мы часто сталкиваемся с неоднозначными мнениями. Данные показывают следующее: {clean_info[:400]}...
-
-### Анализ и выводы
-Я считаю, что тема '{topic}' наглядно демонстрирует нам, как быстро меняются современные тренды и подходы к решению ключевых вопросов.
-
-### Итог
-В заключение хочется подчеркнуть, что это живой и динамичный процесс, определяющий развитие данной сферы."""
-
-    return main_info
+def ask_ai_brain(user_prompt, name):
+    try:
+        system_instruction = (
+            f"Ты — ИИ-ассистент по имени Серік-Ай PRO Max. Твоя главная фишка — ты разговариваешь точно как живой человек, "
+            f"как близкий друг пользователя. Пользователя зовут: {name if name else 'Друг'}. Обязательно часто обращайся к нему по имени! "
+            f"Общайся свободно, используй смайлики (emoji), шути, спрашивай как дела. "
+            f"Если пользователь пишет с ошибками (например, 'салем қалайсың нест', 'істецді', 'как сен сияқты'), ты должен "
+            f"автоматически понимать суть и отвечать очень дружелюбно и естественно. "
+            f"Отвечай строго на том языке, на котором к тебе обратились (казахский или русский). "
+            f"Если просят реферат или эссе, то пиши развернуто и грамотно, но в самом чате веди себя как живой собеседник."
+        )
+        
+        url = "https://ai.fakeopen.com/v1/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": "gpt-3.5-turbo",
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": user_prompt}
+            ],
+            "temperature": 0.8
+        }
+        
+        res = requests.post(url, json=payload, headers=headers, timeout=12)
+        if res.status_code == 200:
+            return res.json()['choices'][0]['message']['content']
+    except:
+        pass
+    
+    if name:
+        return f"Ой, {name}, интернет сәл нашарлап кетті. Қайтадан жазып жіберші? 😊"
+    return "Интернет сәл қатып тұр, қайтадан жазып көрші?"
 
 # ======================
 # БАСҚАРУШЫ ЛОГИКА
 # ======================
 def get_smart_content(q):
-    lang = detect_language(q)
-    q_cleaned = clean_and_translate_for_ai(q)
-    q_low = q_cleaned.lower().strip()
+    q_low = q.lower().strip()
 
-    # Жылдам жауаптар
-    if "привет" in q_low or "салем" in q_low or "сәлем" in q_low:
-        return ("Привет! Салем! Я Serik-AI PRO Max готов к работе.", None, None)
-    if "как дела" in q_low or "қалай жағдай" in q_low:
-        return ("Отлично! Барлығы тұрақты жұмыс істеп тұр.", None, None)
-
-    # СУРЕТ ЖАСАУ СҰРАНЫСЫ
-    if any(x in q_low for x in ["фото", "картинка", "рисунок", "нарисуй", "сурет"]):
+    # СУРЕТ КОМАНДАСЫН АНЫҚТАУ
+    if any(x in q_low for x in ["фото", "картинка", "рисунок", "нарисуй", "сурет", "істецді", "сал"]):
         topic = q_low
-        for w in ["фото", "картинку", "рисунок", "нарисуй", "сделай", "сурет", "салып бер", "сал"]:
+        for w in ["фото", "картинку", "рисунок", "нарисуй", "сделай", "сурет", "салып бер", "сал", "істецді"]:
             topic = topic.replace(w, "")
-        topic = topic.strip() or "cyberpunk city"
+        topic = topic.strip() or "creative neon art"
 
         img_bytes, img_url = generate_hd_image(topic)
-        
         if img_bytes:
             html = f'<div class="photo-box"><img src="{img_url}" style="width:100%; height:auto;"></div>'
-            msg_text = f"🎨 **HD Сурет дайын / HD Изображение готово:** *{topic}*"
+            name_part = f", {st.session_state.user_name}" if st.session_state.user_name else ""
+            msg_text = f"🎨 **Мінекей{name_part}, сұраған суретіңді өзім құрастырып шықтым:** *{topic}*"
             return msg_text, html, img_bytes
         else:
-            return ("Сурет салу мүмкін болмады. Сервер бос емес. / Не удалось создать фото.", None, None)
+            return "Қап, сурет салатын серверім сәл шаршап қалыпты. Қайтадан басып көрші?", None, None
 
-    # МӘТІН ОҚУ / РЕФЕРАТ / ЭССЕ
-    topic = q.replace("напиши", "").replace("реферат", "").replace("эссе", "").replace("про", "")
-    topic = topic.replace("жаз", " ").replace("туралы", " ").replace("маған", " ").strip()
-
-    # Сұраныс тіліне қарай Wikipedia тілін баптау
-    wikipedia.set_lang(lang)
-    
-    wiki_summary = ""
-    try:
-        wiki_summary = wikipedia.summary(topic, sentences=4)
-    except:
-        pass
-
-    google_data = search_internet(topic)
-    raw_main = wiki_summary if wiki_summary else google_data
-
-    if not raw_main:
-        if lang == "kk":
-            return f"Кешіріңіз, '{topic}' туралы интернеттен ештеңе таппадым. Толығырақ жазып көріңіз.", None, None
-        return f"Я не нашел информацию по запросу '{topic}'. Попробуйте точнее.", None, None
-
-    final_text = compose_smart_text(q, topic, raw_main, lang)
-    return final_text, None, None
+    # ЕРКІН ӘҢГІМЕ НЕ ТАПСЫРМАЛАР (ЖИ миын іске қосу)
+    ai_response = ask_ai_brain(q, st.session_state.user_name)
+    return ai_response, None, None
 
 # ======================
-# ЧАТ ТАРИХЫН ЭКРАНҒА ШЫҒАРУ
+# CHAT HISTORY DISPLAY
 # ======================
-# Мұнда ешқандай батырма жоқ, тек тарихты таза көрсетеміз (Бұл қатып қалудан сақтайды)
 for i, msg in enumerate(st.session_state.messages):
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -246,26 +172,49 @@ for i, msg in enumerate(st.session_state.messages):
                 mime="image/png",
                 key=f"dl_{i}"
             )
+        # Бұрынғы хабарламалардың аудиоларын да сақтап көрсетеміз
+        if "audio_bytes" in msg and msg["audio_bytes"]:
+            st.audio(msg["audio_bytes"], format="audio/mp3")
 
 # ======================
-# ПАЙДАЛАНУШЫ ЕНГІЗЕТІН ӨРІС
+# ЕНГІЗУ ӨРІСІ
 # ======================
-prompt = st.chat_input("Сұранысты жазыңыз (Мысалы: 'роботтың суретін сал' немесе 'реферат про Абай')...")
+prompt = st.chat_input("Серікке жаз...")
 
 if prompt:
-    # 1. Қолданушы сұранысын жадқа қосу
     st.session_state.messages.append({"role": "user", "content": prompt})
     
-    # 2. Жауап алу
-    text, image_html, image_bytes = get_smart_content(prompt)
-
-    # 3. Ассистент жауабын жадқа қосу
-    st.session_state.messages.append({
-        "role": "assistant", 
-        "content": text, 
-        "image_html": image_html,
-        "image_bytes": image_bytes
-    })
+    # 1. ЕГЕР АТЫ ӘЛІ ЖАТТАЛМАҒАН БОЛСА
+    if st.session_state.user_name is None:
+        clean_name = prompt.replace("Менің атым", "").replace("меня зовут", "").replace("мен", "").replace("атым", "").strip()
+        st.session_state.user_name = clean_name
+        
+        welcome_text = f"🎉 Мәссаған, танысқанымызға өте қуаныштымын, **{clean_name}**! Атыңды миыма толық жазып алдым. Енді біз нағыз достармыз! Маған кез келген тапсырманы бере бер, не істейміз? 😉"
+        
+        # Сәлемдесудің аудиосын жасау (Тілді анықтап)
+        lang = detect_text_language(welcome_text)
+        audio_data = get_audio(welcome_text, lang)
+        
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": welcome_text,
+            "audio_bytes": audio_data
+        })
     
-    # Бұрынғы қателік тудыратын батырмаларды болдырмау үшін бетті бір рет жаңартамыз
+    # 2. ЕГЕР АТЫ БҰРЫННАН ЖАТТАЛҒАН БОЛСА
+    else:
+        text, image_html, image_bytes = get_smart_content(prompt)
+        
+        # Жауаптың тілін анықтап, аудиоға айналдыру
+        lang = detect_text_language(text)
+        audio_data = get_audio(text, lang)
+        
+        st.session_state.messages.append({
+            "role": "assistant", 
+            "content": text, 
+            "image_html": image_html,
+            "image_bytes": image_bytes,
+            "audio_bytes": audio_data
+        })
+    
     st.rerun()
