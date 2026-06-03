@@ -2,8 +2,8 @@ import streamlit as st
 import json
 import difflib
 import wikipedia
-from gtts import gTTS
 from duckduckgo_search import DDGS
+from gtts import gTTS
 import os
 import re
 import base64
@@ -27,9 +27,6 @@ if "admin" not in st.session_state:
 if "learn_mode" not in st.session_state:
     st.session_state.learn_mode = False
 
-if "last_q" not in st.session_state:
-    st.session_state.last_q = None
-
 # =========================
 # MEMORY
 # =========================
@@ -47,9 +44,10 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# ADMIN LEARNING
+# MEMORY COMMAND
 # =========================
 def handle_memory_command(text):
+
     if text.startswith("запомни "):
 
         if not st.session_state.admin:
@@ -70,27 +68,46 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET
+# WIKIPEDIA SEARCH
 # =========================
-def internet_search(query):
+def wiki_search(query):
     try:
         wikipedia.set_lang("ru")
         return wikipedia.summary(query, sentences=2)
     except:
-        pass
+        return None
 
+# =========================
+# DUCKDUCKGO SEARCH
+# =========================
+def ddg_search(query):
     try:
         ddgs = DDGS()
         results = list(ddgs.text(query, max_results=3))
         if results:
-            return "\n\n".join([r.get("body") or r.get("title") or "" for r in results])
+            return "\n\n".join(
+                [r.get("body") or r.get("title") or "" for r in results]
+            )
     except:
-        pass
+        return None
+
+# =========================
+# INTERNET SEARCH (MAIN)
+# =========================
+def internet_search(query):
+
+    result = wiki_search(query)
+    if result:
+        return result
+
+    result = ddg_search(query)
+    if result:
+        return result
 
     return None
 
 # =========================
-# BRAIN (SELF LEARNING AI)
+# BRAIN (AI LOGIC)
 # =========================
 def brain(text):
 
@@ -115,11 +132,10 @@ def brain(text):
     if answer:
         return answer
 
-    # SELF LEARNING MODE
+    # self-learning mode
     st.session_state.learn_mode = True
-    st.session_state.last_q = text
 
-    return "🤖 Я не знаю ответ. Хочешь научить меня? Напиши: запомни ... это ..."
+    return "🤖 Мен бұл сұрақты білмеймін. Үйретесің бе? Жаз: запомни ... это ..."
 
 # =========================
 # VOICE
@@ -165,13 +181,10 @@ if st.sidebar.button("Login"):
 if st.session_state.admin:
     st.sidebar.success("Admin mode 👑")
 
-    if st.sidebar.button("Logout"):
-        st.session_state.admin = False
-
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI (Self Learning)")
+st.title("🤖 Serik AI FULL STABLE")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -192,9 +205,5 @@ if prompt := st.chat_input("Введите сообщение..."):
     with st.chat_message("assistant"):
         st.markdown(response)
 
-    # reset learning mode if teaching
-    if st.session_state.learn_mode and prompt.startswith("запомни "):
-        st.session_state.learn_mode = False
-        st.session_state.last_q = None
-
+    # voice
     speak(response)
