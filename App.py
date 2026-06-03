@@ -82,7 +82,11 @@ def handle_memory_command(text):
             return "Формат: запомни вопрос это ответ"
 
         q, a = text.split(" это ", 1)
-        memory[q.strip().lower()] = a.strip()
+
+        q = q.strip().lower()
+        a = a.strip()
+
+        memory[q] = a
         save_memory()
 
         return "✅ Запомнил"
@@ -90,7 +94,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET SEARCH
+# INTERNET
 # =========================
 def internet_search(query):
     try:
@@ -107,10 +111,10 @@ def internet_search(query):
     except:
         pass
 
-    return "❌ Ничего не найдено"
+    return None
 
 # =========================
-# BRAIN
+# BRAIN (FIXED PRIORITY)
 # =========================
 def brain(text):
 
@@ -119,10 +123,12 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     ru_text = ru_text.lower().strip()
 
-    mem = handle_memory_command(ru_text)
-    if mem:
-        return translate(mem, "ru", user_lang)
+    # 1️⃣ MEMORY COMMAND
+    mem_cmd = handle_memory_command(ru_text)
+    if mem_cmd:
+        return translate(mem_cmd, "ru", user_lang)
 
+    # 2️⃣ MEMORY FIRST (IMPORTANT FIX 🔥)
     if ru_text in memory:
         return translate(memory[ru_text], "ru", user_lang)
 
@@ -130,8 +136,9 @@ def brain(text):
     if match:
         return translate(memory[match[0]], "ru", user_lang)
 
+    # 3️⃣ INTERNET
     answer = internet_search(ru_text)
-    if answer and "❌" not in answer:
+    if answer:
         return translate(answer, "ru", user_lang)
 
     return translate("Я не знаю 😕 Но можешь научить меня", "ru", user_lang)
@@ -164,21 +171,21 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN ADDED)
+# SIDEBAR (ADMIN)
 # =========================
-st.sidebar.title("⚙️ Menu")
+st.sidebar.title("⚙️ Admin")
 
-password = st.sidebar.text_input("Admin password", type="password")
+password = st.sidebar.text_input("Password", type="password")
 
 if st.sidebar.button("Login"):
     if password == ADMIN_PASSWORD:
         st.session_state.admin = True
-        st.sidebar.success("Admin ON 🔓")
+        st.sidebar.success("ADMIN ON 🔓")
     else:
         st.sidebar.error("Wrong password ❌")
 
 if st.session_state.admin:
-    st.sidebar.success("ADMIN MODE 👑")
+    st.sidebar.success("Admin mode 👑")
 
     if st.sidebar.button("Logout"):
         st.session_state.admin = False
@@ -186,7 +193,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI FULL (Admin Fixed)")
+st.title("🤖 Serik AI FULL FIXED")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
