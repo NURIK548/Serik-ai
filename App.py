@@ -17,7 +17,7 @@ st.set_page_config(page_title="Serik AI", layout="wide")
 ADMIN_PASSWORD = "nurik777"
 
 # =========================
-# SESSION STATE
+# STATE
 # =========================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -68,7 +68,7 @@ def translate(text, src="auto", dest="ru"):
         return text
 
 # =========================
-# MEMORY COMMAND
+# MEMORY COMMAND (FIXED + EMOJI)
 # =========================
 def handle_memory_command(text):
     if text.startswith("запомни "):
@@ -79,19 +79,22 @@ def handle_memory_command(text):
         text = text.replace("запомни ", "", 1)
 
         if " это " not in text:
-            return "Формат: запомни вопрос это ответ"
+            return "⚠️ Формат: запомни вопрос это ответ"
 
         q, a = text.split(" это ", 1)
 
-        memory[q.strip().lower()] = a.strip()
+        q = q.strip()        # 🔥 case FIX
+        a = a.strip()
+
+        memory[q] = a
         save_memory()
 
-        return "✅ Запомнил"
+        return "✅ Запомнил ✨"
 
     return None
 
 # =========================
-# INTERNET SEARCH
+# INTERNET
 # =========================
 def internet_search(query):
     try:
@@ -111,7 +114,7 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN (MEMORY FIRST FIX)
+# BRAIN
 # =========================
 def brain(text):
 
@@ -120,12 +123,10 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     ru_text = ru_text.lower().strip()
 
-    # 1 MEMORY COMMAND
     mem_cmd = handle_memory_command(ru_text)
     if mem_cmd:
         return translate(mem_cmd, "ru", user_lang)
 
-    # 2 MEMORY FIRST
     if ru_text in memory:
         return translate(memory[ru_text], "ru", user_lang)
 
@@ -133,12 +134,11 @@ def brain(text):
     if match:
         return translate(memory[match[0]], "ru", user_lang)
 
-    # 3 INTERNET
     answer = internet_search(ru_text)
     if answer:
         return translate(answer, "ru", user_lang)
 
-    return translate("Я не знаю 😕 Но можешь научить меня", "ru", user_lang)
+    return translate("Я не знаю 😕 Но можешь научить меня ✨", "ru", user_lang)
 
 # =========================
 # VOICE
@@ -168,7 +168,7 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN)
+# SIDEBAR
 # =========================
 st.sidebar.title("⚙️ Admin Panel")
 
@@ -190,7 +190,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI FULL")
+st.title("🤖 Serik AI FULL ✨")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
