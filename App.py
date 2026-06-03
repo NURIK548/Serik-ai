@@ -6,6 +6,7 @@ from gtts import gTTS
 from duckduckgo_search import DDGS
 import os
 import re
+import base64   # 👈 қосылды
 
 # =========================
 # CONFIG
@@ -43,7 +44,7 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# EMOJI CLEANER (NEW)
+# EMOJI CLEANER
 # =========================
 def clean_text(text):
     emoji_pattern = re.compile(
@@ -134,20 +135,31 @@ def brain(text):
     return internet_search(text)
 
 # =========================
-# VOICE
+# VOICE (FIXED)
 # =========================
 def speak(text):
     try:
-        text = clean_text(text)   # 👈 EMOJI REMOVED HERE
+        text = clean_text(text)
+
+        # ❗ punctuation өшіріледі
+        text = re.sub(r"[.,!?;:()\-\n]", " ", text)
+        text = re.sub(r"\s+", " ", text).strip()
 
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
         tts.save(file)
 
-        with open(file, "rb") as f:
-            st.audio(f.read(), format="audio/mp3")
+        # autoplay + hidden audio (плеер жоқ)
+        audio_html = f"""
+        <audio autoplay hidden>
+            <source src="data:audio/mp3;base64,{base64.b64encode(open(file,'rb').read()).decode()}">
+        </audio>
+        """
+
+        st.markdown(audio_html, unsafe_allow_html=True)
 
         os.remove(file)
+
     except:
         pass
 
