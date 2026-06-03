@@ -2,13 +2,9 @@ import streamlit as st
 import json
 import difflib
 import os
+import wikipedia
 from gtts import gTTS
-import google.generativeai as genai
-
-# --- НАСТРОЙКА ИИ (GEMINI API) ---
-# Вставь сюда свой API ключ
-API_KEY = "ТВОЙ_GEMINI_API_KEY" 
-genai.configure(api_key=API_KEY)
+from duckduckgo_search import DDGS  # Даг-Даг кітапханасы
 
 # 1. Загрузка базы данных
 def load_memory():
@@ -23,7 +19,8 @@ memory = load_memory()
 # 2. Озвучка текста (gTTS)
 def speak_text(text):
     try:
-        short_text = text[:200] + "..." if len(text) > 200 else text
+        # Аудио тез жасалуы үшін тек алғашқы 300 әріпті оқиды
+        short_text = text[:300] + "..." if len(text) > 300 else text
         tts = gTTS(text=short_text, lang='ru', slow=False)
         filename = "voice.mp3"
         tts.save(filename)
@@ -35,15 +32,36 @@ def speak_text(text):
     except Exception:
         pass
 
-# 3. Генерация текста через ИИ (Эссе, рефераты)
-def generate_ai_response(query):
+# 3. Поиск без API (Wikipedia + DuckDuckGo)
+def search_no_api(query):
+    # Очищаем запрос от лишних слов, чтобы поиск работал точнее
+    clean_query = query.lower().replace("напиши", "").replace("эссе", "").replace("реферат", "").replace("про", "").strip()
+    
+    result_text = ""
+    
+    # Сначала ищем в Википедии (идеально для рефератов и эссе)
     try:
-        model = genai.GenerativeModel('gemini-2.5-flash')
-        prompt = f"Ты умный ИИ по имени Serik-Ai. Тебя создал Нурик. Ответь на запрос (можешь писать эссе, рефераты, генерировать тексты): {query}"
-        response = model.generate_content(prompt)
-        return response.text
+        wikipedia.set_lang("ru")
+        # Берем 7 предложений, чтобы текст был длинным как реферат
+        wiki_summary = wikipedia.summary(clean_query, sentences=7)
+        result_text += f"Вот подробная информация (из Википедии):\n\n{wiki_summary}"
+        return result_text
     except Exception:
-        return "Ошибка: Не удалось подключиться к модулю ИИ. Проверь API ключ."
+        pass # Если в Википедии нет, идем дальше
+        
+    # Если Википедия не нашла, ищем через DuckDuckGo (даг-даг)
+    try:
+        ddgs = DDGS()
+        results = ddgs.text(clean_query, region='ru-ru', max_results=3)
+        if results:
+            result_text += "Вот что я нашел в интернете (DuckDuckGo):\n\n"
+            for r in results:
+                result_text += f"- {r['body']}\n\n"
+            return result_text
+    except Exception:
+        pass
+        
+    return "Извини, я не смог найти информацию ни в своей базе, ни в интернете."
 
 # 4. Логика поиска ответа
 def get_bot_response(user_input, memory_base):
@@ -52,12 +70,14 @@ def get_bot_response(user_input, memory_base):
     if not memory_base:
         return "База данных пуста."
 
+    # Проверка совпадений в JSON
     matches = difflib.get_close_matches(user_input, memory_base.keys(), n=1, cutoff=0.6)
     
     if matches:
         return memory_base[matches[0]]
     else:
-        return generate_ai_response(user_input)
+        # Запуск поиска в интернете без API
+        return search_no_api(user_input)
 
 # --- ИНТЕРФЕЙС В СТИЛЕ CHATGPT ---
 st.title("Serik-Ai v1.0 PRO")
@@ -72,21 +92,22 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Поле ввода сообщения
-if prompt := st.chat_input("Напишите сообщение..."):
+if prompt := st.chat_input("Напишите сообщение (вопрос, эссе, реферат)..."):
     
-    # Сообщение пользователя
+    # 1. Показываем сообщение пользователя
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Ответ бота
-    response = get_bot_response(prompt, memory)
+    # 2. АНИМАЦИЯ "ДУМАЕТ" (крутилка на экране)
+    with st.spinner("Serik-Ai думает и ищет информацию... ⏳"):
+        response = get_bot_response(prompt, memory)
 
-    # Вывод ответа
+    # 3. Вывод ответа
     with st.chat_message("assistant"):
         st.markdown(response)
     
     st.session_state.messages.append({"role": "assistant", "content": response})
     
-    # Автоматическая озвучка
+    # 4. Автоматическая озвучка
     speak_text(response)
