@@ -40,16 +40,21 @@ if "lang_mode" not in st.session_state:
 # =========================
 def load_memory():
     def detect_lang(text):
-    try:
-        if re.search(r"[а-яА-ЯёЁ]", text):
-            if any(x in text.lower() for x in "әіңғүұқөһ"):
-                return "kk"
+        try:
+            if re.search(r"[а-яА-ЯёЁ]",
+    text):
+                if any(x in text.lower() for
+    x in "әіңғүұқөһ"):
+                    return "kk"
+                return "ru"
+        
+            elif re.search(r"[a-zA-Z]",
+    text):
+                return "en"
+        
             return "ru"
-        elif re.search(r"[a-zA-Z]", text):
-            return "en"
-        return "ru"
-    except:
-        return "ru"
+        except:
+            return "ru"
 
 
 def translate_text(text, source="auto", target="ru"):
