@@ -5,18 +5,17 @@ import os
 from gtts import gTTS
 import wikipedia
 
-# 1. Загрузка базы
+# 1. Базаны жүктеу
 def load_memory():
     try:
         with open("memory_base.json", "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as e:
-        st.error(f"Ошибка загрузки базы: {e}")
+    except Exception:
         return {}
 
 memory = load_memory()
 
-# 2. Озвучка текста
+# 2. Аудио (Сөйлеу)
 def speak_text(text):
     try:
         tts = gTTS(text=text, lang='ru', slow=False)
@@ -28,19 +27,18 @@ def speak_text(text):
         st.audio(audio_bytes, format="audio/mp3", autoplay=True)
         
         os.remove(filename)
-    except Exception as e:
-        st.error(f"Ошибка аудио: {e}")
+    except Exception:
+        pass
 
-# 3. Поиск в интернете
+# 3. Интернеттен іздеу
 def search_internet(query):
     try:
         wikipedia.set_lang("ru")
-        summary = wikipedia.summary(query, sentences=2)
-        return summary
+        return wikipedia.summary(query, sentences=2)
     except Exception:
         return "Ответа нет ни в базе, ни в интернете."
 
-# 4. Логика ответов
+# 4. Жауапты табу (қателерді кешірумен)
 def get_bot_response(user_input, memory_base):
     user_input = user_input.lower().strip()
     
@@ -50,18 +48,39 @@ def get_bot_response(user_input, memory_base):
     matches = difflib.get_close_matches(user_input, memory_base.keys(), n=1, cutoff=0.6)
     
     if matches:
-        correct_question = matches[0]
-        return memory_base[correct_question]
+        return memory_base[matches[0]]
     else:
         return search_internet(user_input)
 
-# --- ИНТЕРФЕЙС ---
-st.title("Serik-Ai v1.0 PRO")
-st.write("Создатель: **Нурик**")
+# --- CHATGPT СИЯҚТЫ ИНТЕРФЕЙС ---
+st.title("Serik-Ai")
 
-user_query = st.text_input("Задай вопрос:")
+# Чат тарихын сақтау үшін
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if user_query:
-    response = get_bot_response(user_query, memory)
-    st.write(f"**Serik-Ai:** {response}")
+# Бұрынғы жазылған хаттарды экранға шығару
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+
+# Төмендегі чатқа жазу жолағы
+if prompt := st.chat_input("Напишите сообщение..."):
+    
+    # Пайдаланушының жазғанын экранға шығару
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Боттың жауабын дайындау
+    response = get_bot_response(prompt, memory)
+
+    # Боттың жауабын экранға шығару
+    with st.chat_message("assistant"):
+        st.markdown(response)
+    
+    # Боттың жауабын тарихқа қосу
+    st.session_state.messages.append({"role": "assistant", "content": response})
+    
+    # Дауыстап оқу
     speak_text(response)
