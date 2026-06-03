@@ -41,19 +41,6 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECT (RU / EN ONLY)
-# =========================
-def detect_lang(text):
-    text = text.lower()
-
-    en_score = len(re.findall(r"[a-z]", text))
-    ru_score = len(re.findall(r"[а-яё]", text))
-
-    if en_score > ru_score:
-        return "en"
-    return "ru"
-
-# =========================
 # MEMORY COMMAND
 # =========================
 def handle_memory_command(text):
@@ -77,7 +64,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET SEARCH
+# INTERNET
 # =========================
 def internet_search(query):
     try:
@@ -97,11 +84,9 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN (MEMORY FIRST)
+# BRAIN
 # =========================
 def brain(text):
-
-    user_lang = detect_lang(text)
 
     ru_text = text.lower().strip()
 
@@ -150,7 +135,7 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN)
+# SIDEBAR
 # =========================
 st.sidebar.title("⚙️ Admin Panel")
 
@@ -172,7 +157,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI CLEAN VERSION")
+st.title("🤖 Serik AI")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -185,7 +170,8 @@ if prompt := st.chat_input("Жазыңыз..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Ойлап жатыр... 🤖"):
+    # 🔥 FIXED LOADING TEXT (Russian)
+    with st.spinner("Обрабатываю запрос... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
