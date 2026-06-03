@@ -163,7 +163,7 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Жазыңыз..."):
+if prompt := st.chat_input("Напишите сюда..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
@@ -171,7 +171,7 @@ if prompt := st.chat_input("Жазыңыз..."):
         st.markdown(prompt)
 
     # 🔥 FIXED LOADING TEXT (Russian)
-    with st.spinner("Обрабатываю запрос... 🤖"):
+    with st.spinner("думаю... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
