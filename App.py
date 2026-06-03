@@ -7,6 +7,7 @@ from duckduckgo_search import DDGS
 import os
 import re
 import base64
+from deep_translator import GoogleTranslator
 
 # =========================
 # CONFIG
@@ -38,6 +39,27 @@ if "lang_mode" not in st.session_state:
 # MEMORY LOAD
 # =========================
 def load_memory():
+    def detect_lang(text):
+    try:
+        if re.search(r"[а-яА-ЯёЁ]", text):
+            if any(x in text.lower() for x in "әіңғүұқөһ"):
+                return "kk"
+            return "ru"
+        elif re.search(r"[a-zA-Z]", text):
+            return "en"
+        return "ru"
+    except:
+        return "ru"
+
+
+def translate_text(text, source="auto", target="ru"):
+    try:
+        return GoogleTranslator(
+            source=source,
+            target=target
+        ).translate(text)
+    except:
+        return text
     try:
         with open("memory_base.json", "r", encoding="utf-8") as f:
             return json.load(f)
@@ -143,27 +165,30 @@ def translate_response(text):
 # =========================
 def brain(text):
 
-    text = text.lower().strip()
+    user_lang = detect_lang(text)
+
+    ru_text = translate_text(text, "auto", "ru")
+    text = ru_text.lower().strip()
 
     mem = handle_memory_command(text)
     if mem:
-        return mem
+        return translate_text(mem, "ru", user_lang)
 
     if text in memory:
-        return translate_response(memory[text])
+        return translate_text(memory[text], "ru", user_lang)
 
     match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
     if match:
-        return translate_response(memory[match[0]])
+        return translate_text(memory[match[0]], "ru", user_lang)
 
     answer = internet_search(text)
 
     if "❌ Ничего не найдено" in answer:
         st.session_state.learning_mode = True
         st.session_state.last_question = text
-        return "Мен білмеймін 😕 / Я не знаю 😕 Жаз: запомни ... это ..."
+        return translate_text("Я не знаю 😕 Научи меня: запомни вопрос это ответ", "ru", user_lang)
 
-    return translate_response(answer)
+    return translate_text(answer, "ru", user_lang)
 
 # =========================
 # VOICE
