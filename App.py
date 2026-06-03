@@ -4,7 +4,6 @@ import difflib
 import wikipedia
 from gtts import gTTS
 from duckduckgo_search import DDGS
-from deep_translator import GoogleTranslator
 import os
 import re
 import base64
@@ -42,33 +41,20 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECT
+# LANGUAGE DETECT (RU / EN ONLY)
 # =========================
 def detect_lang(text):
     text = text.lower()
 
-    kz = "әіңғүұқөһ"
-    kz_score = sum(1 for c in text if c in kz)
     en_score = len(re.findall(r"[a-z]", text))
     ru_score = len(re.findall(r"[а-яё]", text))
 
-    if kz_score > 0:
-        return "kk"
-    elif en_score > ru_score:
+    if en_score > ru_score:
         return "en"
     return "ru"
 
 # =========================
-# TRANSLATE
-# =========================
-def translate(text, src="auto", dest="ru"):
-    try:
-        return GoogleTranslator(source=src, target=dest).translate(text)
-    except:
-        return text
-
-# =========================
-# MEMORY COMMAND (FIXED + EMOJI)
+# MEMORY COMMAND
 # =========================
 def handle_memory_command(text):
     if text.startswith("запомни "):
@@ -83,10 +69,7 @@ def handle_memory_command(text):
 
         q, a = text.split(" это ", 1)
 
-        q = q.strip()        # 🔥 case FIX
-        a = a.strip()
-
-        memory[q] = a
+        memory[q.strip()] = a.strip()
         save_memory()
 
         return "✅ Запомнил ✨"
@@ -94,7 +77,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
     try:
@@ -114,31 +97,30 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN
+# BRAIN (MEMORY FIRST)
 # =========================
 def brain(text):
 
     user_lang = detect_lang(text)
 
-    ru_text = translate(text, "auto", "ru")
-    ru_text = ru_text.lower().strip()
+    ru_text = text.lower().strip()
 
     mem_cmd = handle_memory_command(ru_text)
     if mem_cmd:
-        return translate(mem_cmd, "ru", user_lang)
+        return mem_cmd
 
     if ru_text in memory:
-        return translate(memory[ru_text], "ru", user_lang)
+        return memory[ru_text]
 
     match = difflib.get_close_matches(ru_text, memory.keys(), n=1, cutoff=0.75)
     if match:
-        return translate(memory[match[0]], "ru", user_lang)
+        return memory[match[0]]
 
     answer = internet_search(ru_text)
     if answer:
-        return translate(answer, "ru", user_lang)
+        return answer
 
-    return translate("Я не знаю 😕 Но можешь научить меня ✨", "ru", user_lang)
+    return "Я не знаю 😕 Но можешь научить меня ✨"
 
 # =========================
 # VOICE
@@ -168,7 +150,7 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR
+# SIDEBAR (ADMIN)
 # =========================
 st.sidebar.title("⚙️ Admin Panel")
 
@@ -190,7 +172,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI FULL ✨")
+st.title("🤖 Serik AI CLEAN VERSION")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
