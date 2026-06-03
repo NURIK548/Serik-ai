@@ -15,7 +15,7 @@ MEMORY_FILE = "memory_base.json"
 wikipedia.set_lang("ru")
 
 # =========================
-# CLEAN TEXT
+# CLEAN TEXT (.,;: - бәрін өшіру)
 # =========================
 def clean_text(text):
     text = text.lower()
@@ -39,35 +39,44 @@ def save_memory(data):
 memory = load_memory()
 
 # =========================
-# SESSION STATE
+# FREQUENT QUESTIONS TRACK
 # =========================
-if "chat" not in st.session_state:
-    st.session_state.chat = []
-
 if "freq" not in st.session_state:
     st.session_state.freq = {}
 
+if "last_chat" not in st.session_state:
+    st.session_state.last_chat = []
+
 # =========================
-# SEARCH
+# MATCH FUNCTION
 # =========================
-def find_best_match(q, memory):
-    keys = list(memory.keys())
-    match = difflib.get_close_matches(q, keys, n=1, cutoff=0.6)
+def find_best_match(question, memory):
+    questions = list(memory.keys())
+    match = difflib.get_close_matches(question, questions, n=1, cutoff=0.6)
     return match[0] if match else None
 
+# =========================
+# WEB SEARCH
+# =========================
+def search_web(query):
+    results = []
+    with DDGS() as ddgs:
+        for r in ddgs.text(query, max_results=5):
+            results.append(r["body"])
+    return results
+
+# =========================
+# WIKI
+# =========================
 def wiki_search(query):
     try:
         return wikipedia.summary(query, sentences=3)
     except:
-        return "Wikipedia табылмады."
+        return "Wikipedia-дан ештеңе табылмады."
 
-def web_search(query):
-    results = []
-    with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=3):
-            results.append(r["body"])
-    return results
-
+# =========================
+# TTS
+# =========================
 def speak(text):
     tts = gTTS(text=text, lang="ru")
     audio = io.BytesIO()
@@ -78,59 +87,54 @@ def speak(text):
 # =========================
 # UI
 # =========================
-st.set_page_config(page_title="AI CHAT PRO", layout="wide")
-st.title("🤖 Serik AI Chat PRO")
+st.title("🤖 Serik-AI PRO Clean")
 
 user_input = st.text_input("Сұрақ жаз:")
 
-if st.button("Send") and user_input:
+if st.button("Жіберу") and user_input:
 
-    q = clean_text(user_input)
+    clean_q = clean_text(user_input)
 
-    # freq update
-    st.session_state.freq[q] = st.session_state.freq.get(q, 0) + 1
+    # frequency count
+    st.session_state.freq[clean_q] = st.session_state.freq.get(clean_q, 0) + 1
 
-    # add chat
-    st.session_state.chat.append(("user", user_input))
+    # last chat save
+    st.session_state.last_chat.append(clean_q)
+    if len(st.session_state.last_chat) > 10:
+        st.session_state.last_chat.pop(0)
 
-    # memory check
-    match = find_best_match(q, memory)
+    # memory match
+    match = find_best_match(clean_q, memory)
 
     if match:
         answer = memory[match]
+        st.success("🧠 Жадтан")
     else:
-        wiki = wiki_search(q)
-        web = web_search(q)
+        wiki = wiki_search(clean_q)
+        web = search_web(clean_q)
 
-        answer = wiki + "\n\n🌐 Web:\n" + "\n".join(web)
+        answer = wiki + "\n\n🌐 Internet:\n" + "\n".join(web[:3])
 
-        memory[q] = answer
+        memory[clean_q] = answer
         save_memory(memory)
 
-    st.session_state.chat.append(("bot", answer))
+        st.info("💾 Сақталды")
+
+    st.write(answer)
 
     audio = speak(answer)
     st.audio(audio, format="audio/mp3")
 
 # =========================
-# CHAT DISPLAY
-# =========================
-for role, msg in st.session_state.chat:
-    if role == "user":
-        st.markdown(f"🧑 **Сен:** {msg}")
-    else:
-        st.markdown(f"🤖 **Bot:** {msg}")
-
-# =========================
 # SIDEBAR
 # =========================
-st.sidebar.title("🧠 Панель")
+st.sidebar.title("🧠 Memory")
 
-if st.sidebar.button("Memory"):
+if st.sidebar.button("Бар memory"):
     st.sidebar.write(memory)
 
 if st.sidebar.button("Last chat"):
-    st.sidebar.write(st.session_state.chat[-10:])
+    st.sidebar.write(st.session_state.last_chat)
 
 if st.sidebar.button("🔥 Частые сұрақтар"):
     sorted_freq = dict(sorted(st.session_state.freq.items(), key=lambda x: x[1], reverse=True))
@@ -139,4 +143,4 @@ if st.sidebar.button("🔥 Частые сұрақтар"):
 if st.sidebar.button("Clear memory"):
     memory = {}
     save_memory(memory)
-    st.sidebar.success("Memory cleared")
+    st.sidebar.success("Өшірілді")
