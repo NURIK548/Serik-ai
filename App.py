@@ -12,7 +12,7 @@ import base64
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Serik AI PRO", layout="wide")
+st.set_page_config(page_title="Serik AI PRO MAX", layout="wide")
 
 # =========================
 # STATE
@@ -40,13 +40,13 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECT
+# LANGUAGE DETECTION
 # =========================
 def detect_lang(text):
     text = text.lower()
 
-    kz = "әіңғүұқөһ"
-    kz_score = sum(1 for c in text if c in kz)
+    kz_chars = "әіңғүұқөһ"
+    kz_score = sum(1 for c in text if c in kz_chars)
     en_score = len(re.findall(r"[a-z]", text))
     ru_score = len(re.findall(r"[а-яё]", text))
 
@@ -67,15 +67,13 @@ def translate(text, src="auto", dest="ru"):
         return text
 
 # =========================
-# AUTO CORRECTION (🔥 NEW)
+# AUTO CORRECTION
 # =========================
 def auto_correct(text):
     text = text.lower().strip()
-
     keys = list(memory.keys())
 
     match = difflib.get_close_matches(text, keys, n=1, cutoff=0.6)
-
     if match:
         return match[0]
 
@@ -87,7 +85,7 @@ def auto_correct(text):
 def handle_memory_command(text):
     if text.startswith("запомни "):
         if not st.session_state.admin:
-            return "❌ Только админ"
+            return "❌ Только админ может учить бота"
 
         text = text.replace("запомни ", "", 1)
 
@@ -123,7 +121,7 @@ def internet_search(query):
     return "❌ Ничего не найдено"
 
 # =========================
-# BRAIN (CORE AI)
+# BRAIN
 # =========================
 def brain(text):
 
@@ -132,7 +130,6 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     text = ru_text.lower().strip()
 
-    # 🔥 FIX: auto correction
     text = auto_correct(text)
 
     mem = handle_memory_command(text)
@@ -186,6 +183,8 @@ def speak(text):
 # UI
 # =========================
 st.title("🤖 Serik AI PRO MAX")
+
+st.write("🌍 Multi-language AI (KZ / RU / EN) + Memory + Internet")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
