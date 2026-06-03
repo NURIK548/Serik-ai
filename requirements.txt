@@ -1,5 +1,4 @@
 streamlit
-gTTS
 wikipedia
-google-generativeai
-
+gtts
+duckduckgo-search
