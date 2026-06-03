@@ -1,16 +1,26 @@
 import streamlit as st
 import json
 import difflib
-import os
-import random
 import wikipedia
 from gtts import gTTS
 from duckduckgo_search import DDGS
+import os
 
 # =========================
-# ADMIN PASSWORD
+# CONFIG
 # =========================
-ADMIN_PASSWORD = "1234"
+st.set_page_config(page_title="Serik AI", layout="wide")
+
+ADMIN_PASSWORD = "nurik777"
+
+# =========================
+# SESSION STATE
+# =========================
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 # =========================
 # MEMORY LOAD
@@ -25,133 +35,133 @@ def load_memory():
 memory = load_memory()
 
 # =========================
-# MEMORY SAVE
+# SAVE MEMORY
 # =========================
 def save_memory():
     with open("memory_base.json", "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# ADMIN COMMAND
+# ADMIN MEMORY SYSTEM (FIXED)
 # =========================
-def handle_memory_command(user_input):
-    if user_input.startswith("запомни "):
+def handle_memory_command(text):
+
+    if text.startswith("запомни "):
+
+        if not st.session_state.admin:
+            return "❌ Только админ может обучать бота"
+
         try:
-            parts = user_input.replace("запомни ", "").split("|")
+            text = text.replace("запомни ", "", 1)
 
-            if len(parts) != 3:
-                return "Формат: запомни пароль|сұрақ|жауап"
+            # FORMAT: вопрос это ответ
+            if " это " not in text:
+                return "Формат: запомни вопрос это ответ"
 
-            password, question, answer = parts
+            question, answer = text.split(" это ", 1)
 
-            if password != ADMIN_PASSWORD:
-                return "Қате пароль ❌"
+            question = question.strip().lower()
+            answer = answer.strip()
 
-            memory[question.lower()] = answer
+            memory[question] = answer
             save_memory()
 
-            return "Есте сақтадым ✅"
+            return "✅ Запомнил"
 
         except:
-            return "Қате формат"
+            return "❌ Ошибка"
 
     return None
 
 # =========================
-# VOICE
-# =========================
-def speak_text(text):
-    try:
-        text = text[:300]
-        tts = gTTS(text=text, lang="ru")
-        filename = "voice.mp3"
-        tts.save(filename)
-
-        with open(filename, "rb") as f:
-            audio = f.read()
-
-        st.audio(audio, format="audio/mp3", autoplay=True)
-
-        os.remove(filename)
-    except:
-        pass
-
-# =========================
 # INTERNET SEARCH
 # =========================
-def search_no_api(query):
-    query = query.lower().strip()
+def internet_search(query):
 
-    # Wikipedia
     try:
-        if len(query) > 3:
-            wikipedia.set_lang("ru")
-            return wikipedia.summary(query, sentences=3)
+        wikipedia.set_lang("ru")
+        return wikipedia.summary(query, sentences=2)
     except:
         pass
 
-    # DuckDuckGo
     try:
         ddgs = DDGS()
-        results = list(ddgs.text(query, max_results=5))
+        results = list(ddgs.text(query, max_results=3))
 
         if results:
-            text = "Нашёл в интернете:\n\n"
-            for r in results:
-                text += f"• {r.get('body') or r.get('title') or ''}\n\n"
-            return text
+            return "\n\n".join([r.get("body") or r.get("title") or "" for r in results])
+
     except:
         pass
 
-    return "Не смог найти информацию."
+    return "❌ Ничего не найдено"
 
 # =========================
-# BRAIN (AI LOGIC)
+# BRAIN
 # =========================
-def get_bot_response(user_input, memory_base):
+def brain(text):
 
-    user_input = user_input.lower().strip()
+    text = text.lower().strip()
 
-    # admin command
-    mem_cmd = handle_memory_command(user_input)
-    if mem_cmd:
-        return mem_cmd
+    # memory command
+    mem = handle_memory_command(text)
+    if mem:
+        return mem
 
-    # exact match
-    if user_input in memory_base:
-        return memory_base[user_input]
+    # exact memory
+    if text in memory:
+        return memory[text]
 
-    # fuzzy match (improved)
-    matches = difflib.get_close_matches(
-        user_input,
-        memory_base.keys(),
-        n=1,
-        cutoff=0.75
-    )
-
-    if matches:
-        return memory_base[matches[0]]
+    # fuzzy memory
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
+    if match:
+        return memory[match[0]]
 
     # internet fallback
-    answer = search_no_api(user_input)
-
-    # safe learning (avoid junk spam)
-    if "Не смог" not in answer and len(user_input) < 50:
-        memory[user_input] = answer
-        save_memory()
-
-    return answer
+    return internet_search(text)
 
 # =========================
-# STREAMLIT UI
+# VOICE
 # =========================
-st.set_page_config(page_title="Serik-Ai PRO", layout="wide")
+def speak(text):
+    try:
+        tts = gTTS(text=text[:300], lang="ru")
+        file = "voice.mp3"
+        tts.save(file)
 
-st.title("🤖 Serik-Ai PRO")
-st.write("Разработчик: Нурик")
+        with open(file, "rb") as f:
+            st.audio(f.read(), format="audio/mp3")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+        os.remove(file)
+    except:
+        pass
+
+# =========================
+# SIDEBAR (ADMIN)
+# =========================
+st.sidebar.title("⚙️ Menu")
+
+if not st.session_state.admin:
+    password = st.sidebar.text_input("Admin password", type="password")
+
+    if st.sidebar.button("Login"):
+        if password == ADMIN_PASSWORD:
+            st.session_state.admin = True
+            st.sidebar.success("Admin ON 🔓")
+        else:
+            st.sidebar.error("Wrong password ❌")
+else:
+    st.sidebar.success("Admin MODE 🔐")
+
+    if st.sidebar.button("Logout"):
+        st.session_state.admin = False
+
+# =========================
+# UI
+# =========================
+st.title("🤖 Serik AI PRO")
+
+st.write("💬 ChatGPT-style AI бот (admin protected)")
 
 # history
 for msg in st.session_state.messages:
@@ -166,12 +176,12 @@ if prompt := st.chat_input("Напишите сообщение..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Думаю..."):
-        response = get_bot_response(prompt, memory)
+    with st.spinner("Думаю... 🤖"):
+        response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
 
     with st.chat_message("assistant"):
         st.markdown(response)
 
-    speak_text(response)
+    speak(response)
