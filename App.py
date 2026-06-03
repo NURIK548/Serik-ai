@@ -10,12 +10,12 @@ import re
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Serik AI PRO MAX", layout="wide")
+st.set_page_config(page_title="Serik AI", layout="wide")
 
 ADMIN_PASSWORD = "nurik777"
 
 # =========================
-# STATE
+# SESSION STATE
 # =========================
 if "admin" not in st.session_state:
     st.session_state.admin = False
@@ -24,7 +24,7 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 # =========================
-# MEMORY
+# MEMORY LOAD
 # =========================
 def load_memory():
     try:
@@ -35,12 +35,15 @@ def load_memory():
 
 memory = load_memory()
 
+# =========================
+# SAVE MEMORY
+# =========================
 def save_memory():
     with open("memory_base.json", "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# CLEAN TEXT (EMOJI REMOVE)
+# EMOJI CLEANER (NEW)
 # =========================
 def clean_text(text):
     emoji_pattern = re.compile(
@@ -57,89 +60,85 @@ def clean_text(text):
     return emoji_pattern.sub("", text)
 
 # =========================
-# MEMORY COMMAND
+# ADMIN MEMORY SYSTEM
 # =========================
 def handle_memory_command(text):
 
     if text.startswith("запомни "):
 
         if not st.session_state.admin:
-            return "Только админ может обучать бота"
+            return "❌ Только админ может обучать бота"
 
-        text = text.replace("запомни ", "", 1)
+        try:
+            text = text.replace("запомни ", "", 1)
 
-        if " это " not in text:
-            return "Формат: запомни вопрос это ответ"
+            if " это " not in text:
+                return "Формат: запомни вопрос это ответ"
 
-        q, a = text.split(" это ", 1)
-        memory[q.strip().lower()] = a.strip()
-        save_memory()
+            question, answer = text.split(" это ", 1)
 
-        return "Запомнил"
+            question = question.strip().lower()
+            answer = answer.strip()
+
+            memory[question] = answer
+            save_memory()
+
+            return "✅ Запомнил"
+
+        except:
+            return "❌ Ошибка"
 
     return None
 
 # =========================
-# INTERNET (IMPROVED)
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
 
-    # Wikipedia first
     try:
         wikipedia.set_lang("ru")
         return wikipedia.summary(query, sentences=2)
     except:
         pass
 
-    # DuckDuckGo fallback
     try:
         ddgs = DDGS()
-        results = list(ddgs.text(query, max_results=5))
+        results = list(ddgs.text(query, max_results=3))
 
-        output = []
-        for r in results:
-            text = r.get("body") or r.get("title")
-            if text:
-                output.append(text)
-
-        if output:
-            return "\n\n".join(output)
+        if results:
+            return "\n\n".join([r.get("body") or r.get("title") or "" for r in results])
 
     except:
         pass
 
-    return "Ничего не найдено"
+    return "❌ Ничего не найдено"
 
 # =========================
-# BRAIN (SMARTER)
+# BRAIN
 # =========================
 def brain(text):
 
     text = text.lower().strip()
 
-    # memory command
     mem = handle_memory_command(text)
     if mem:
         return mem
 
-    # exact memory
     if text in memory:
         return memory[text]
 
-    # fuzzy memory
-    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.7)
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
     if match:
         return memory[match[0]]
 
-    # internet
     return internet_search(text)
 
 # =========================
-# VOICE OUTPUT
+# VOICE
 # =========================
 def speak(text):
     try:
-        text = clean_text(text)
+        text = clean_text(text)   # 👈 EMOJI REMOVED HERE
 
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
@@ -153,21 +152,21 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR ADMIN
+# SIDEBAR (ADMIN)
 # =========================
 st.sidebar.title("⚙️ Menu")
 
 if not st.session_state.admin:
-    pwd = st.sidebar.text_input("Admin password", type="password")
+    password = st.sidebar.text_input("Admin password", type="password")
 
     if st.sidebar.button("Login"):
-        if pwd == ADMIN_PASSWORD:
+        if password == ADMIN_PASSWORD:
             st.session_state.admin = True
-            st.sidebar.success("Admin ON")
+            st.sidebar.success("Admin ON 🔓")
         else:
-            st.sidebar.error("Wrong password")
+            st.sidebar.error("Wrong password ❌")
 else:
-    st.sidebar.success("Admin MODE")
+    st.sidebar.success("Admin MODE 🔐")
 
     if st.sidebar.button("Logout"):
         st.session_state.admin = False
@@ -175,41 +174,22 @@ else:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI PRO MAX")
+st.title("🤖 Serik AI PRO")
 
-st.write("ChatGPT-style bot + memory + internet + voice")
+st.write("💬 ChatGPT-style AI бот (admin protected)")
 
-# =========================
-# DISPLAY CHAT
-# =========================
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# =========================
-# TEXT INPUT
-# =========================
-prompt = st.chat_input("Жазыңыз...")
-
-# =========================
-# VOICE INPUT (NEW)
-# =========================
-audio = st.audio_input("🎤 Дауыс жіберу (optional)")
-
-if audio:
-    st.info("Voice input қосылды, бірақ STT керек (Whisper API керек болса айта сал)")
-
-# =========================
-# RESPONSE
-# =========================
-if prompt:
+if prompt := st.chat_input("Напишите сообщение..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Ойлап жатыр... 🤖"):
+    with st.spinner("Думаю... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
