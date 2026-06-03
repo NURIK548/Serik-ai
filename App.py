@@ -6,7 +6,7 @@ from gtts import gTTS
 import google.generativeai as genai
 
 # --- НАСТРОЙКА ИИ (GEMINI API) ---
-# Нурик, вставь сюда свой API ключ от Google AI Studio
+# Вставь сюда свой API ключ
 API_KEY = "ТВОЙ_GEMINI_API_KEY" 
 genai.configure(api_key=API_KEY)
 
@@ -23,7 +23,6 @@ memory = load_memory()
 # 2. Озвучка текста (gTTS)
 def speak_text(text):
     try:
-        # Чтобы длинные эссе не озвучивались слишком долго, берем первые 200 символов
         short_text = text[:200] + "..." if len(text) > 200 else text
         tts = gTTS(text=short_text, lang='ru', slow=False)
         filename = "voice.mp3"
@@ -36,11 +35,10 @@ def speak_text(text):
     except Exception:
         pass
 
-# 3. Генерация текста через ИИ (Эссе, рефераты, составление предложений)
+# 3. Генерация текста через ИИ (Эссе, рефераты)
 def generate_ai_response(query):
     try:
         model = genai.GenerativeModel('gemini-2.5-flash')
-        # Инструкция для ИИ, чтобы он помнил свое имя и создателя
         prompt = f"Ты умный ИИ по имени Serik-Ai. Тебя создал Нурик. Ответь на запрос (можешь писать эссе, рефераты, генерировать тексты): {query}"
         response = model.generate_content(prompt)
         return response.text
@@ -54,13 +52,11 @@ def get_bot_response(user_input, memory_base):
     if not memory_base:
         return "База данных пуста."
 
-    # Проверка совпадений в JSON (с допущением опечаток)
     matches = difflib.get_close_matches(user_input, memory_base.keys(), n=1, cutoff=0.6)
     
     if matches:
         return memory_base[matches[0]]
     else:
-        # Если в базе ответа нет, ИИ сам генерирует текст (эссе, реферат и т.д.)
         return generate_ai_response(user_input)
 
 # --- ИНТЕРФЕЙС В СТИЛЕ CHATGPT ---
@@ -78,19 +74,19 @@ for message in st.session_state.messages:
 # Поле ввода сообщения
 if prompt := st.chat_input("Напишите сообщение..."):
     
-    # Отображение сообщения пользователя
+    # Сообщение пользователя
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Получение ответа от бота
+    # Ответ бота
     response = get_bot_response(prompt, memory)
 
-    # Отображение ответа бота
+    # Вывод ответа
     with st.chat_message("assistant"):
         st.markdown(response)
     
     st.session_state.messages.append({"role": "assistant", "content": response})
     
-    # Автоматическая озвучка ответа
+    # Автоматическая озвучка
     speak_text(response)
