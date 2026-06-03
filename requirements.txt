@@ -2,3 +2,4 @@ streamlit
 wikipedia
 gtts
 duckduckgo-search
+requests
