@@ -17,7 +17,7 @@ st.set_page_config(page_title="Serik AI", layout="wide")
 ADMIN_PASSWORD = "nurik777"
 
 # =========================
-# STATE
+# SESSION STATE
 # =========================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -83,10 +83,7 @@ def handle_memory_command(text):
 
         q, a = text.split(" это ", 1)
 
-        q = q.strip().lower()
-        a = a.strip()
-
-        memory[q] = a
+        memory[q.strip().lower()] = a.strip()
         save_memory()
 
         return "✅ Запомнил"
@@ -94,7 +91,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
     try:
@@ -114,7 +111,7 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN (FIXED PRIORITY)
+# BRAIN (MEMORY FIRST FIX)
 # =========================
 def brain(text):
 
@@ -123,12 +120,12 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     ru_text = ru_text.lower().strip()
 
-    # 1️⃣ MEMORY COMMAND
+    # 1 MEMORY COMMAND
     mem_cmd = handle_memory_command(ru_text)
     if mem_cmd:
         return translate(mem_cmd, "ru", user_lang)
 
-    # 2️⃣ MEMORY FIRST (IMPORTANT FIX 🔥)
+    # 2 MEMORY FIRST
     if ru_text in memory:
         return translate(memory[ru_text], "ru", user_lang)
 
@@ -136,7 +133,7 @@ def brain(text):
     if match:
         return translate(memory[match[0]], "ru", user_lang)
 
-    # 3️⃣ INTERNET
+    # 3 INTERNET
     answer = internet_search(ru_text)
     if answer:
         return translate(answer, "ru", user_lang)
@@ -173,14 +170,14 @@ def speak(text):
 # =========================
 # SIDEBAR (ADMIN)
 # =========================
-st.sidebar.title("⚙️ Admin")
+st.sidebar.title("⚙️ Admin Panel")
 
 password = st.sidebar.text_input("Password", type="password")
 
 if st.sidebar.button("Login"):
     if password == ADMIN_PASSWORD:
         st.session_state.admin = True
-        st.sidebar.success("ADMIN ON 🔓")
+        st.sidebar.success("Admin ON 🔓")
     else:
         st.sidebar.error("Wrong password ❌")
 
@@ -193,7 +190,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI FULL FIXED")
+st.title("🤖 Serik AI FULL")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
