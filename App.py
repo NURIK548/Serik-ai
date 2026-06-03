@@ -5,6 +5,7 @@ import wikipedia
 from gtts import gTTS
 from duckduckgo_search import DDGS
 import os
+import re
 
 # =========================
 # CONFIG
@@ -42,7 +43,24 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# ADMIN MEMORY SYSTEM (FIXED)
+# EMOJI CLEANER (NEW)
+# =========================
+def clean_text(text):
+    emoji_pattern = re.compile(
+        "["
+        "\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U0001F1E0-\U0001F1FF"
+        "\U00002700-\U000027BF"
+        "\U000024C2-\U0001F251"
+        "]+",
+        flags=re.UNICODE
+    )
+    return emoji_pattern.sub("", text)
+
+# =========================
+# ADMIN MEMORY SYSTEM
 # =========================
 def handle_memory_command(text):
 
@@ -54,7 +72,6 @@ def handle_memory_command(text):
         try:
             text = text.replace("запомни ", "", 1)
 
-            # FORMAT: вопрос это ответ
             if " это " not in text:
                 return "Формат: запомни вопрос это ответ"
 
@@ -103,21 +120,17 @@ def brain(text):
 
     text = text.lower().strip()
 
-    # memory command
     mem = handle_memory_command(text)
     if mem:
         return mem
 
-    # exact memory
     if text in memory:
         return memory[text]
 
-    # fuzzy memory
     match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
     if match:
         return memory[match[0]]
 
-    # internet fallback
     return internet_search(text)
 
 # =========================
@@ -125,6 +138,8 @@ def brain(text):
 # =========================
 def speak(text):
     try:
+        text = clean_text(text)   # 👈 EMOJI REMOVED HERE
+
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
         tts.save(file)
@@ -163,12 +178,10 @@ st.title("🤖 Serik AI PRO")
 
 st.write("💬 ChatGPT-style AI бот (admin protected)")
 
-# history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-# input
 if prompt := st.chat_input("Напишите сообщение..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
