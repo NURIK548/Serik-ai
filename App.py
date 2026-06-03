@@ -9,21 +9,19 @@ import os
 import re
 import base64
 
+# =========================
+# CONFIG
+# =========================
 st.set_page_config(page_title="Serik AI", layout="wide")
 
-ADMIN_PASSWORD = "nurik777"
-
 # =========================
-# STATE
+# SESSION STATE
 # =========================
-if "admin" not in st.session_state:
-    st.session_state.admin = False
-
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-if "learning_mode" not in st.session_state:
-    st.session_state.learning_mode = False
+if "admin" not in st.session_state:
+    st.session_state.admin = False
 
 # =========================
 # MEMORY
@@ -42,22 +40,26 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECTION
+# LANGUAGE DETECTION (FIXED)
 # =========================
 def detect_lang(text):
-    try:
-        if re.search(r"[а-яА-ЯёЁ]", text):
-            if any(x in text.lower() for x in "әіңғүұқөһ"):
-                return "kk"
-            return "ru"
-        elif re.search(r"[a-zA-Z]", text):
-            return "en"
-        return "ru"
-    except:
+    text = text.lower()
+
+    kz_chars = "әіңғүұқөһ"
+
+    kz_score = sum(1 for c in text if c in kz_chars)
+    en_score = len(re.findall(r"[a-z]", text))
+    ru_score = len(re.findall(r"[а-яё]", text))
+
+    if kz_score > 0:
+        return "kk"
+    elif en_score > ru_score:
+        return "en"
+    else:
         return "ru"
 
 # =========================
-# TRANSLATOR
+# TRANSLATE
 # =========================
 def translate(text, src="auto", dest="ru"):
     try:
@@ -107,14 +109,14 @@ def internet_search(query):
     return "❌ Ничего не найдено"
 
 # =========================
-# BRAIN
+# BRAIN (CORE AI)
 # =========================
 def brain(text):
 
     user_lang = detect_lang(text)
 
-    text_ru = translate(text, "auto", "ru")
-    text = text_ru.lower().strip()
+    ru_text = translate(text, "auto", "ru")
+    text = ru_text.lower().strip()
 
     mem = handle_memory_command(text)
     if mem:
@@ -136,19 +138,8 @@ def brain(text):
     return translate(answer, "ru", user_lang)
 
 # =========================
-# VOICE FIX (Kazakh safer)
+# VOICE (FIXED SIMPLE)
 # =========================
-def kazakh_fix(text):
-    text = text.replace("ә", "a")
-    text = text.replace("і", "i")
-    text = text.replace("ң", "n")
-    text = text.replace("ғ", "g")
-    text = text.replace("қ", "k")
-    text = text.replace("ұ", "u")
-    text = text.replace("ү", "u")
-    text = text.replace("ө", "o")
-    return text
-
 def speak(text):
     try:
         text = re.sub(r"[^\w\sа-яА-ЯёЁ]", " ", text)
@@ -159,9 +150,8 @@ def speak(text):
 
         lang = detect_lang(text)
 
-        # 🔥 fix kazakh pronunciation
+        # gTTS limitation → fallback
         if lang == "kk":
-            text = kazakh_fix(text)
             lang = "ru"
 
         tts = gTTS(text=text[:300], lang="ru")
@@ -175,7 +165,6 @@ def speak(text):
         """
 
         st.markdown(audio_html, unsafe_allow_html=True)
-
         os.remove(file)
 
     except:
