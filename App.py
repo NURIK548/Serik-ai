@@ -24,8 +24,14 @@ if "messages" not in st.session_state:
 if "admin" not in st.session_state:
     st.session_state.admin = False
 
+if "learn_mode" not in st.session_state:
+    st.session_state.learn_mode = False
+
+if "last_q" not in st.session_state:
+    st.session_state.last_q = None
+
 # =========================
-# MEMORY LOAD
+# MEMORY
 # =========================
 def load_memory():
     try:
@@ -41,7 +47,7 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# MEMORY COMMAND
+# ADMIN LEARNING
 # =========================
 def handle_memory_command(text):
     if text.startswith("запомни "):
@@ -52,7 +58,7 @@ def handle_memory_command(text):
         text = text.replace("запомни ", "", 1)
 
         if " это " not in text:
-            return "⚠️ Формат: запомни вопрос это ответ"
+            return "⚠️ формат: запомни вопрос это ответ"
 
         q, a = text.split(" это ", 1)
 
@@ -64,7 +70,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET SEARCH
+# INTERNET
 # =========================
 def internet_search(query):
     try:
@@ -84,28 +90,36 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN
+# BRAIN (SELF LEARNING AI)
 # =========================
 def brain(text):
 
     text = text.lower().strip()
 
+    # memory command
     mem_cmd = handle_memory_command(text)
     if mem_cmd:
         return mem_cmd
 
+    # memory exact
     if text in memory:
         return memory[text]
 
-    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
+    # fuzzy memory
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.7)
     if match:
         return memory[match[0]]
 
+    # internet
     answer = internet_search(text)
     if answer:
         return answer
 
-    return "Я не знаю 😕 Но можешь научить меня ✨"
+    # SELF LEARNING MODE
+    st.session_state.learn_mode = True
+    st.session_state.last_q = text
+
+    return "🤖 Я не знаю ответ. Хочешь научить меня? Напиши: запомни ... это ..."
 
 # =========================
 # VOICE
@@ -135,7 +149,7 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN)
+# SIDEBAR
 # =========================
 st.sidebar.title("⚙️ Admin")
 
@@ -146,7 +160,7 @@ if st.sidebar.button("Login"):
         st.session_state.admin = True
         st.sidebar.success("Admin ON 🔓")
     else:
-        st.sidebar.error("Wrong password ❌")
+        st.sidebar.error("Wrong ❌")
 
 if st.session_state.admin:
     st.sidebar.success("Admin mode 👑")
@@ -157,25 +171,30 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI")
+st.title("🤖 Serik AI (Self Learning)")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Жазыңыз..."):
+if prompt := st.chat_input("Введите сообщение..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Ойлап жатырмын... 🤖"):
+    with st.spinner("thinking... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
 
     with st.chat_message("assistant"):
         st.markdown(response)
+
+    # reset learning mode if teaching
+    if st.session_state.learn_mode and prompt.startswith("запомни "):
+        st.session_state.learn_mode = False
+        st.session_state.last_q = None
 
     speak(response)
