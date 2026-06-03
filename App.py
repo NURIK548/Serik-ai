@@ -12,7 +12,7 @@ import base64
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Serik AI PRO MAX", layout="wide")
+st.set_page_config(page_title="Serik AI NO API", layout="wide")
 
 # =========================
 # STATE
@@ -40,13 +40,13 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECTION
+# LANGUAGE DETECT (FIXED)
 # =========================
 def detect_lang(text):
     text = text.lower()
 
-    kz_chars = "әіңғүұқөһ"
-    kz_score = sum(1 for c in text if c in kz_chars)
+    kz = "әіңғүұқөһ"
+    kz_score = sum(1 for c in text if c in kz)
     en_score = len(re.findall(r"[a-z]", text))
     ru_score = len(re.findall(r"[а-яё]", text))
 
@@ -58,7 +58,7 @@ def detect_lang(text):
         return "ru"
 
 # =========================
-# TRANSLATE
+# TRANSLATE (NO API)
 # =========================
 def translate(text, src="auto", dest="ru"):
     try:
@@ -67,25 +67,12 @@ def translate(text, src="auto", dest="ru"):
         return text
 
 # =========================
-# AUTO CORRECTION
-# =========================
-def auto_correct(text):
-    text = text.lower().strip()
-    keys = list(memory.keys())
-
-    match = difflib.get_close_matches(text, keys, n=1, cutoff=0.6)
-    if match:
-        return match[0]
-
-    return text
-
-# =========================
-# MEMORY COMMAND
+# MEMORY LEARN
 # =========================
 def handle_memory_command(text):
     if text.startswith("запомни "):
         if not st.session_state.admin:
-            return "❌ Только админ может учить бота"
+            return "❌ Только админ"
 
         text = text.replace("запомни ", "", 1)
 
@@ -121,38 +108,38 @@ def internet_search(query):
     return "❌ Ничего не найдено"
 
 # =========================
-# BRAIN
+# CORE BRAIN (NO GPT)
 # =========================
 def brain(text):
 
     user_lang = detect_lang(text)
 
     ru_text = translate(text, "auto", "ru")
-    text = ru_text.lower().strip()
+    ru_text = ru_text.lower().strip()
 
-    text = auto_correct(text)
-
-    mem = handle_memory_command(text)
+    # memory command
+    mem = handle_memory_command(ru_text)
     if mem:
         return translate(mem, "ru", user_lang)
 
-    if text in memory:
-        return translate(memory[text], "ru", user_lang)
+    # exact memory
+    if ru_text in memory:
+        return translate(memory[ru_text], "ru", user_lang)
 
-    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
+    # fuzzy fix
+    match = difflib.get_close_matches(ru_text, memory.keys(), n=1, cutoff=0.75)
     if match:
         return translate(memory[match[0]], "ru", user_lang)
 
-    answer = internet_search(text)
+    # internet
+    answer = internet_search(ru_text)
+    if answer and "❌" not in answer:
+        return translate(answer, "ru", user_lang)
 
-    if "❌ Ничего не найдено" in answer:
-        msg = "Я не знаю 😕 Научи меня: запомни вопрос это ответ"
-        return translate(msg, "ru", user_lang)
-
-    return translate(answer, "ru", user_lang)
+    return translate("Я не знаю 😕 Но можешь научить меня: запомни вопрос это ответ", "ru", user_lang)
 
 # =========================
-# VOICE
+# VOICE FIX (KAZAKH SAFE)
 # =========================
 def speak(text):
     try:
@@ -162,6 +149,7 @@ def speak(text):
         if not text:
             return
 
+        # gTTS only RU fallback
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
         tts.save(file)
@@ -173,7 +161,6 @@ def speak(text):
         """
 
         st.markdown(audio_html, unsafe_allow_html=True)
-
         os.remove(file)
 
     except:
@@ -182,22 +169,22 @@ def speak(text):
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI PRO MAX")
+st.title("🤖 Serik AI NO API VERSION")
 
-st.write("🌍 Multi-language AI (KZ / RU / EN) + Memory + Internet")
+st.write("🔥 Memory + multilingual + internet + learning (NO GPT)")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Жазыңыз / Напишите / Write..."):
+if prompt := st.chat_input("Жазыңыз..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Думаю... 🤖"):
+    with st.spinner("Ойлап жатыр... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
