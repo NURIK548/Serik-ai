@@ -2,5 +2,4 @@ streamlit
 wikipedia
 gtts
 duckduckgo-search
-requests
 deep-translator
