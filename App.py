@@ -7,9 +7,13 @@ from gtts import gTTS
 from duckduckgo_search import DDGS
 
 # =========================
-# ЖАДТЫ ЖҮКТЕУ
+# ПАРОЛЬ
 # =========================
+ADMIN_PASSWORD = "1234"
 
+# =========================
+# MEMORY
+# =========================
 def load_memory():
     try:
         with open("memory_base.json", "r", encoding="utf-8") as f:
@@ -19,154 +23,118 @@ def load_memory():
 
 memory = load_memory()
 
-# =========================
-# ЖАДҚА САҚТАУ
-# =========================
-
-def save_to_memory(question, answer):
-    try:
-        memory[question.lower()] = answer
-
-        with open("memory_base.json", "w", encoding="utf-8") as f:
-            json.dump(
-                memory,
-                f,
-                ensure_ascii=False,
-                indent=4
-            )
-    except Exception:
-        pass
+def save_memory():
+    with open("memory_base.json", "w", encoding="utf-8") as f:
+        json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# ДАУЫСПЕН ОҚУ
+# ЗАПОМНИ КОМАНДА
 # =========================
+def handle_memory_command(user_input):
+    if user_input.startswith("запомни "):
+        try:
+            parts = user_input.replace("запомни ", "").split("|")
 
+            if len(parts) != 3:
+                return "Формат: запомни пароль|сұрақ|жауап"
+
+            password, question, answer = parts
+
+            if password != ADMIN_PASSWORD:
+                return "Қате пароль ❌"
+
+            memory[question.lower()] = answer
+            save_memory()
+
+            return "Есте сақтадым ✅"
+
+        except:
+            return "Қате формат"
+
+    return None
+
+# =========================
+# VOICE
+# =========================
 def speak_text(text):
     try:
-        short_text = text[:300] + "..." if len(text) > 300 else text
+        short_text = text[:300]
 
-        tts = gTTS(
-            text=short_text,
-            lang="ru",
-            slow=False
-        )
-
+        tts = gTTS(text=short_text, lang="ru")
         filename = "voice.mp3"
         tts.save(filename)
 
-        with open(filename, "rb") as audio_file:
-            audio_bytes = audio_file.read()
+        with open(filename, "rb") as f:
+            audio = f.read()
 
-        st.audio(
-            audio_bytes,
-            format="audio/mp3",
-            autoplay=True
-        )
+        st.audio(audio, format="audio/mp3", autoplay=True)
 
         os.remove(filename)
 
-    except Exception:
+    except:
         pass
 
 # =========================
-# ИНТЕРНЕТТЕН ІЗДЕУ
+# INTERNET SEARCH
 # =========================
-
 def search_no_api(query):
-
-    clean_query = (
-        query.lower()
-        .replace("напиши", "")
-        .replace("эссе", "")
-        .replace("реферат", "")
-        .replace("про", "")
-        .strip()
-    )
+    clean_query = query.lower().strip()
 
     try:
         wikipedia.set_lang("ru")
-
-        wiki_summary = wikipedia.summary(
-            clean_query,
-            sentences=7
-        )
-
-        return (
-            "Вот подробная информация из Википедии:\n\n"
-            + wiki_summary
-        )
-
+        return wikipedia.summary(clean_query, sentences=5)
     except:
         pass
 
     try:
         ddgs = DDGS()
-
-        results = list(
-            ddgs.text(
-                clean_query,
-                region="ru-ru",
-                max_results=5
-            )
-        )
+        results = list(ddgs.text(clean_query, max_results=5))
 
         if results:
-
-            text = "Вот что я нашёл в интернете:\n\n"
-
+            text = "Нашёл в интернете:\n\n"
             for r in results:
-                body = r.get("body", "")
-                text += f"• {body}\n\n"
-
+                text += f"• {r.get('body','')}\n\n"
             return text
 
     except:
         pass
 
-    return "Извини, я не смог найти информацию."
+    return "Не смог найти информацию."
 
 # =========================
-# БОТ ЛОГИКАСЫ
+# BRAIN LOGIC
 # =========================
-
 def get_bot_response(user_input, memory_base):
 
     user_input = user_input.lower().strip()
 
-    if not memory_base:
+    # memory command
+    mem = handle_memory_command(user_input)
+    if mem:
+        return mem
 
-        answer = search_no_api(user_input)
+    # exact memory
+    if user_input in memory_base:
+        return memory_base[user_input]
 
-        if "Извини" not in answer:
-            save_to_memory(user_input, answer)
-
-        return answer
-
-    matches = difflib.get_close_matches(
-        user_input,
-        memory_base.keys(),
-        n=1,
-        cutoff=0.6
-    )
-
+    # fuzzy memory
+    matches = difflib.get_close_matches(user_input, memory_base.keys(), n=1, cutoff=0.6)
     if matches:
         return memory_base[matches[0]]
 
+    # internet
     answer = search_no_api(user_input)
 
-    if answer and "Извини" not in answer:
-        save_to_memory(user_input, answer)
+    if "Не смог" not in answer:
+        memory[user_input] = answer
+        save_memory()
 
     return answer
 
 # =========================
-# STREAMLIT ИНТЕРФЕЙСІ
+# STREAMLIT UI
 # =========================
-
-st.set_page_config(
-    page_title="Serik-Ai PRO",
-    layout="wide"
-)
+st.set_page_config(page_title="Serik-Ai PRO", layout="wide")
 
 st.title("🤖 Serik-Ai PRO")
 st.write("Разработчик: Нурик")
@@ -174,43 +142,25 @@ st.write("Разработчик: Нурик")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Чат тарихы
+# chat history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-for message in st.session_state.messages:
-
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
-
-# Хабарлама енгізу
-
+# input
 if prompt := st.chat_input("Напишите сообщение..."):
 
-    st.session_state.messages.append(
-        {
-            "role": "user",
-            "content": prompt
-        }
-    )
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner(
-        "Serik-Ai думает и ищет информацию..."
-    ):
-        response = get_bot_response(
-            prompt,
-            memory
-        )
+    with st.spinner("Думаю..."):
+        response = get_bot_response(prompt, memory)
+
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
     with st.chat_message("assistant"):
         st.markdown(response)
-
-    st.session_state.messages.append(
-        {
-            "role": "assistant",
-            "content": response
-        }
-    )
 
     speak_text(response)
