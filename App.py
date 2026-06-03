@@ -84,6 +84,7 @@ def ddg_search(query):
     try:
         ddgs = DDGS()
         results = list(ddgs.text(query, max_results=3))
+
         if results:
             return "\n\n".join(
                 [r.get("body") or r.get("title") or "" for r in results]
@@ -92,7 +93,7 @@ def ddg_search(query):
         return None
 
 # =========================
-# INTERNET SEARCH (MAIN)
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
 
@@ -118,7 +119,7 @@ def brain(text):
     if mem_cmd:
         return mem_cmd
 
-    # memory exact
+    # exact memory
     if text in memory:
         return memory[text]
 
@@ -135,7 +136,7 @@ def brain(text):
     # self-learning mode
     st.session_state.learn_mode = True
 
-    return "🤖 Мен бұл сұрақты білмеймін. Үйретесің бе? Жаз: запомни ... это ..."
+    return "🤖 Я не знаю ответ. Хочешь научить меня? Напиши: запомни ... это ..."
 
 # =========================
 # VOICE
@@ -167,16 +168,16 @@ def speak(text):
 # =========================
 # SIDEBAR
 # =========================
-st.sidebar.title("⚙️ Admin")
+st.sidebar.title("⚙️ Панель")
 
-password = st.sidebar.text_input("Password", type="password")
+password = st.sidebar.text_input("Пароль", type="password")
 
-if st.sidebar.button("Login"):
+if st.sidebar.button("Войти"):
     if password == ADMIN_PASSWORD:
         st.session_state.admin = True
-        st.sidebar.success("Admin ON 🔓")
+        st.sidebar.success("Админ режим 🔓")
     else:
-        st.sidebar.error("Wrong ❌")
+        st.sidebar.error("Неверный пароль ❌")
 
 if st.session_state.admin:
     st.sidebar.success("Admin mode 👑")
@@ -197,7 +198,7 @@ if prompt := st.chat_input("Введите сообщение..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("thinking... 🤖"):
+    with st.spinner("думаю... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
@@ -205,5 +206,4 @@ if prompt := st.chat_input("Введите сообщение..."):
     with st.chat_message("assistant"):
         st.markdown(response)
 
-    # voice
     speak(response)
