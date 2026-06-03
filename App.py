@@ -9,15 +9,12 @@ import os
 import re
 import base64
 
-# =========================
-# CONFIG
-# =========================
 st.set_page_config(page_title="Serik AI", layout="wide")
 
 ADMIN_PASSWORD = "nurik777"
 
 # =========================
-# SESSION STATE
+# STATE
 # =========================
 if "admin" not in st.session_state:
     st.session_state.admin = False
@@ -27,9 +24,6 @@ if "messages" not in st.session_state:
 
 if "learning_mode" not in st.session_state:
     st.session_state.learning_mode = False
-
-if "last_question" not in st.session_state:
-    st.session_state.last_question = None
 
 # =========================
 # MEMORY
@@ -62,6 +56,9 @@ def detect_lang(text):
     except:
         return "ru"
 
+# =========================
+# TRANSLATOR
+# =========================
 def translate(text, src="auto", dest="ru"):
     try:
         return GoogleTranslator(source=src, target=dest).translate(text)
@@ -139,8 +136,19 @@ def brain(text):
     return translate(answer, "ru", user_lang)
 
 # =========================
-# VOICE
+# VOICE FIX (Kazakh safer)
 # =========================
+def kazakh_fix(text):
+    text = text.replace("ә", "a")
+    text = text.replace("і", "i")
+    text = text.replace("ң", "n")
+    text = text.replace("ғ", "g")
+    text = text.replace("қ", "k")
+    text = text.replace("ұ", "u")
+    text = text.replace("ү", "u")
+    text = text.replace("ө", "o")
+    return text
+
 def speak(text):
     try:
         text = re.sub(r"[^\w\sа-яА-ЯёЁ]", " ", text)
@@ -150,7 +158,10 @@ def speak(text):
             return
 
         lang = detect_lang(text)
-        if lang not in ["ru", "en", "kk"]:
+
+        # 🔥 fix kazakh pronunciation
+        if lang == "kk":
+            text = kazakh_fix(text)
             lang = "ru"
 
         tts = gTTS(text=text[:300], lang="ru")
@@ -166,6 +177,7 @@ def speak(text):
         st.markdown(audio_html, unsafe_allow_html=True)
 
         os.remove(file)
+
     except:
         pass
 
@@ -185,7 +197,7 @@ if prompt := st.chat_input("Напишите сообщение..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Думаю..."):
+    with st.spinner("Думаю... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
