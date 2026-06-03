@@ -135,21 +135,25 @@ def brain(text):
     return internet_search(text)
 
 # =========================
-# VOICE (FIXED)
+# VOICE (FIXED - FINAL)
 # =========================
 def speak(text):
     try:
         text = clean_text(text)
 
-        # ❗ punctuation өшіріледі
-        text = re.sub(r"[.,!?;:()\-\n]", " ", text)
+        # ❗ emoji + punctuation толық тазалау
+        text = re.sub(r"[^\w\sа-яА-ЯёЁ]", " ", text)
+
+        # бос орындарды қысқарту
         text = re.sub(r"\s+", " ", text).strip()
+
+        if not text:
+            return
 
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
         tts.save(file)
 
-        # autoplay + hidden audio (плеер жоқ)
         audio_html = f"""
         <audio autoplay hidden>
             <source src="data:audio/mp3;base64,{base64.b64encode(open(file,'rb').read()).decode()}">
