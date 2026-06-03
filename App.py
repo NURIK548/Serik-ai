@@ -12,7 +12,9 @@ import base64
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Serik AI NO API", layout="wide")
+st.set_page_config(page_title="Serik AI", layout="wide")
+
+ADMIN_PASSWORD = "nurik777"
 
 # =========================
 # STATE
@@ -40,7 +42,7 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECT (FIXED)
+# LANGUAGE DETECT
 # =========================
 def detect_lang(text):
     text = text.lower()
@@ -54,11 +56,10 @@ def detect_lang(text):
         return "kk"
     elif en_score > ru_score:
         return "en"
-    else:
-        return "ru"
+    return "ru"
 
 # =========================
-# TRANSLATE (NO API)
+# TRANSLATE
 # =========================
 def translate(text, src="auto", dest="ru"):
     try:
@@ -67,12 +68,13 @@ def translate(text, src="auto", dest="ru"):
         return text
 
 # =========================
-# MEMORY LEARN
+# MEMORY COMMAND
 # =========================
 def handle_memory_command(text):
     if text.startswith("запомни "):
+
         if not st.session_state.admin:
-            return "❌ Только админ"
+            return "❌ Только админ может обучать"
 
         text = text.replace("запомни ", "", 1)
 
@@ -108,7 +110,7 @@ def internet_search(query):
     return "❌ Ничего не найдено"
 
 # =========================
-# CORE BRAIN (NO GPT)
+# BRAIN
 # =========================
 def brain(text):
 
@@ -117,29 +119,25 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     ru_text = ru_text.lower().strip()
 
-    # memory command
     mem = handle_memory_command(ru_text)
     if mem:
         return translate(mem, "ru", user_lang)
 
-    # exact memory
     if ru_text in memory:
         return translate(memory[ru_text], "ru", user_lang)
 
-    # fuzzy fix
     match = difflib.get_close_matches(ru_text, memory.keys(), n=1, cutoff=0.75)
     if match:
         return translate(memory[match[0]], "ru", user_lang)
 
-    # internet
     answer = internet_search(ru_text)
     if answer and "❌" not in answer:
         return translate(answer, "ru", user_lang)
 
-    return translate("Я не знаю 😕 Но можешь научить меня: запомни вопрос это ответ", "ru", user_lang)
+    return translate("Я не знаю 😕 Но можешь научить меня", "ru", user_lang)
 
 # =========================
-# VOICE FIX (KAZAKH SAFE)
+# VOICE
 # =========================
 def speak(text):
     try:
@@ -149,7 +147,6 @@ def speak(text):
         if not text:
             return
 
-        # gTTS only RU fallback
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
         tts.save(file)
@@ -167,11 +164,29 @@ def speak(text):
         pass
 
 # =========================
+# SIDEBAR (ADMIN ADDED)
+# =========================
+st.sidebar.title("⚙️ Menu")
+
+password = st.sidebar.text_input("Admin password", type="password")
+
+if st.sidebar.button("Login"):
+    if password == ADMIN_PASSWORD:
+        st.session_state.admin = True
+        st.sidebar.success("Admin ON 🔓")
+    else:
+        st.sidebar.error("Wrong password ❌")
+
+if st.session_state.admin:
+    st.sidebar.success("ADMIN MODE 👑")
+
+    if st.sidebar.button("Logout"):
+        st.session_state.admin = False
+
+# =========================
 # UI
 # =========================
-st.title("🤖 Serik AI NO API VERSION")
-
-st.write("🔥 Memory + multilingual + internet + learning (NO GPT)")
+st.title("🤖 Serik AI FULL (Admin Fixed)")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
