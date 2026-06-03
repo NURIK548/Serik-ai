@@ -7,6 +7,7 @@ from duckduckgo_search import DDGS
 import os
 import re
 import base64
+import random
 
 # =========================
 # CONFIG
@@ -24,8 +25,11 @@ if "messages" not in st.session_state:
 if "admin" not in st.session_state:
     st.session_state.admin = False
 
+if "offline" not in st.session_state:
+    st.session_state.offline = False
+
 # =========================
-# MEMORY LOAD
+# MEMORY
 # =========================
 def load_memory():
     try:
@@ -44,29 +48,59 @@ def save_memory():
 # MEMORY COMMAND
 # =========================
 def handle_memory_command(text):
+
     if text.startswith("запомни "):
 
         if not st.session_state.admin:
-            return "❌ Только админ может обучать"
+            return "❌ Admin only"
 
         text = text.replace("запомни ", "", 1)
 
         if " это " not in text:
-            return "⚠️ Формат: запомни вопрос это ответ"
+            return "⚠️ format: запомни question это answer"
 
         q, a = text.split(" это ", 1)
 
         memory[q.strip().lower()] = a.strip()
         save_memory()
 
-        return "✅ Запомнил ✨"
+        return "✅ Saved"
 
     return None
 
 # =========================
-# INTERNET SEARCH
+# AUTO 1000+ GENERATOR
+# =========================
+def generate_base():
+
+    base = {}
+    templates = [
+        ("привет", "ПРИВЕТ 👋"),
+        ("как дела", "Нормально 😎"),
+        ("спасибо", "Пожалуйста,чем могу помочь 😊"),
+        ("нормально", "Круто 😎"),
+        ("ты кто", "Я ИССКУСТВЕННЫЙ ИНТЕЛЕКТ(ИИ) 🤖"),
+        ("помоги мне", "ДА ЧЕМ МОГУ ПОМОЧЬ 😊"),
+        ("прикол", "😄 ну примерно как"),
+    ]
+
+    for i in range(1000):
+        q, a = templates[i % len(templates)]
+        base[f"{q} {i}"] = f"{a} #{i}"
+
+    with open("memory_base.json", "w", encoding="utf-8") as f:
+        json.dump(base, f, ensure_ascii=False, indent=4)
+
+    return "✅"
+
+# =========================
+# INTERNET
 # =========================
 def internet_search(query):
+
+    if st.session_state.offline:
+        return None
+
     try:
         wikipedia.set_lang("ru")
         return wikipedia.summary(query, sentences=2)
@@ -84,7 +118,7 @@ def internet_search(query):
     return None
 
 # =========================
-# BRAIN
+# GPT-LIKE BRAIN
 # =========================
 def brain(text):
 
@@ -97,15 +131,22 @@ def brain(text):
     if text in memory:
         return memory[text]
 
-    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.7)
     if match:
         return memory[match[0]]
+
+    # thinking simulation 🤖
+    st.toast(random.choice([
+        "🧠 ДУМАЮ...",
+        "🔎 ИЩУ ДЛЯ ВАС...",
+        "🤖 Анализ делаб жди..."
+    ]))
 
     answer = internet_search(text)
     if answer:
         return answer
 
-    return "Я не знаю 😕 Но можешь научить меня ✨"
+    return f"🤖 Я этого не знаю,Но я могу этого учить: '{text}'"
 
 # =========================
 # VOICE
@@ -135,10 +176,11 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN)
+# SIDEBAR
 # =========================
-st.sidebar.title("⚙️ Admin")
+st.sidebar.title("⚙️ Panel")
 
+# admin
 password = st.sidebar.text_input("Password", type="password")
 
 if st.sidebar.button("Login"):
@@ -146,31 +188,30 @@ if st.sidebar.button("Login"):
         st.session_state.admin = True
         st.sidebar.success("Admin ON 🔓")
     else:
-        st.sidebar.error("Wrong password ❌")
+        st.sidebar.error("Wrong ❌")
 
-if st.session_state.admin:
-    st.sidebar.success("Admin mode 👑")
+if st.sidebar.button("Generate 1000+"):
+    st.sidebar.success(generate_base())
 
-    if st.sidebar.button("Logout"):
-        st.session_state.admin = False
+st.session_state.offline = st.sidebar.toggle("Offline mode")
 
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI")
+st.title("🤖 Serik AI PRO")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Жазыңыз..."):
+if prompt := st.chat_input("пишите сюда..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    with st.spinner("Ойлап жатырмын... 🤖"):
+    with st.spinner("thinking... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
