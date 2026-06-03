@@ -1,146 +1,187 @@
 import streamlit as st
 import json
-import os
 import difflib
 import wikipedia
 from gtts import gTTS
 from duckduckgo_search import DDGS
-import io
-import re
+import os
 
 # =========================
-# SETTINGS
+# CONFIG
 # =========================
-MEMORY_FILE = "memory_base.json"
-wikipedia.set_lang("ru")
+st.set_page_config(page_title="Serik AI", layout="wide")
+
+ADMIN_PASSWORD = "nurik777"
 
 # =========================
-# CLEAN TEXT (.,;: - бәрін өшіру)
+# SESSION STATE
 # =========================
-def clean_text(text):
-    text = text.lower()
-    text = re.sub(r"[.,;:!?\"'()\[\]{}]", "", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+if "admin" not in st.session_state:
+    st.session_state.admin = False
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 # =========================
-# MEMORY
+# MEMORY LOAD
 # =========================
 def load_memory():
-    if not os.path.exists(MEMORY_FILE):
+    try:
+        with open("memory_base.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except:
         return {}
-    with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def save_memory(data):
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
 
 memory = load_memory()
 
 # =========================
-# FREQUENT QUESTIONS TRACK
+# SAVE MEMORY
 # =========================
-if "freq" not in st.session_state:
-    st.session_state.freq = {}
-
-if "last_chat" not in st.session_state:
-    st.session_state.last_chat = []
+def save_memory():
+    with open("memory_base.json", "w", encoding="utf-8") as f:
+        json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# MATCH FUNCTION
+# ADMIN MEMORY SYSTEM (FIXED)
 # =========================
-def find_best_match(question, memory):
-    questions = list(memory.keys())
-    match = difflib.get_close_matches(question, questions, n=1, cutoff=0.6)
-    return match[0] if match else None
+def handle_memory_command(text):
+
+    if text.startswith("запомни "):
+
+        if not st.session_state.admin:
+            return "❌ Только админ может обучать бота"
+
+        try:
+            text = text.replace("запомни ", "", 1)
+
+            # FORMAT: вопрос это ответ
+            if " это " not in text:
+                return "Формат: запомни вопрос это ответ"
+
+            question, answer = text.split(" это ", 1)
+
+            question = question.strip().lower()
+            answer = answer.strip()
+
+            memory[question] = answer
+            save_memory()
+
+            return "✅ Запомнил"
+
+        except:
+            return "❌ Ошибка"
+
+    return None
 
 # =========================
-# WEB SEARCH
+# INTERNET SEARCH
 # =========================
-def search_web(query):
-    results = []
-    with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=5):
-            results.append(r["body"])
-    return results
+def internet_search(query):
 
-# =========================
-# WIKI
-# =========================
-def wiki_search(query):
     try:
-        return wikipedia.summary(query, sentences=3)
+        wikipedia.set_lang("ru")
+        return wikipedia.summary(query, sentences=2)
     except:
-        return "Wikipedia-дан ештеңе табылмады."
+        pass
+
+    try:
+        ddgs = DDGS()
+        results = list(ddgs.text(query, max_results=3))
+
+        if results:
+            return "\n\n".join([r.get("body") or r.get("title") or "" for r in results])
+
+    except:
+        pass
+
+    return "❌ Ничего не найдено"
 
 # =========================
-# TTS
+# BRAIN
+# =========================
+def brain(text):
+
+    text = text.lower().strip()
+
+    # memory command
+    mem = handle_memory_command(text)
+    if mem:
+        return mem
+
+    # exact memory
+    if text in memory:
+        return memory[text]
+
+    # fuzzy memory
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
+    if match:
+        return memory[match[0]]
+
+    # internet fallback
+    return internet_search(text)
+
+# =========================
+# VOICE
 # =========================
 def speak(text):
-    tts = gTTS(text=text, lang="ru")
-    audio = io.BytesIO()
-    tts.write_to_fp(audio)
-    audio.seek(0)
-    return audio
+    try:
+        tts = gTTS(text=text[:300], lang="ru")
+        file = "voice.mp3"
+        tts.save(file)
+
+        with open(file, "rb") as f:
+            st.audio(f.read(), format="audio/mp3")
+
+        os.remove(file)
+    except:
+        pass
+
+# =========================
+# SIDEBAR (ADMIN)
+# =========================
+st.sidebar.title("⚙️ Menu")
+
+if not st.session_state.admin:
+    password = st.sidebar.text_input("Admin password", type="password")
+
+    if st.sidebar.button("Login"):
+        if password == ADMIN_PASSWORD:
+            st.session_state.admin = True
+            st.sidebar.success("Admin ON 🔓")
+        else:
+            st.sidebar.error("Wrong password ❌")
+else:
+    st.sidebar.success("Admin MODE 🔐")
+
+    if st.sidebar.button("Logout"):
+        st.session_state.admin = False
 
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik-AI PRO Clean")
+st.title("🤖 Serik AI PRO")
 
-user_input = st.text_input("Сұрақ жаз:")
+st.write("💬 ChatGPT-style AI бот (admin protected)")
 
-if st.button("Жіберу") and user_input:
+# history
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
 
-    clean_q = clean_text(user_input)
+# input
+if prompt := st.chat_input("Напишите сообщение..."):
 
-    # frequency count
-    st.session_state.freq[clean_q] = st.session_state.freq.get(clean_q, 0) + 1
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
-    # last chat save
-    st.session_state.last_chat.append(clean_q)
-    if len(st.session_state.last_chat) > 10:
-        st.session_state.last_chat.pop(0)
+    with st.chat_message("user"):
+        st.markdown(prompt)
 
-    # memory match
-    match = find_best_match(clean_q, memory)
+    with st.spinner("Думаю... 🤖"):
+        response = brain(prompt)
 
-    if match:
-        answer = memory[match]
-        st.success("🧠 Жадтан")
-    else:
-        wiki = wiki_search(clean_q)
-        web = search_web(clean_q)
+    st.session_state.messages.append({"role": "assistant", "content": response})
 
-        answer = wiki + "\n\n🌐 Internet:\n" + "\n".join(web[:3])
+    with st.chat_message("assistant"):
+        st.markdown(response)
 
-        memory[clean_q] = answer
-        save_memory(memory)
-
-        st.info("💾 Сақталды")
-
-    st.write(answer)
-
-    audio = speak(answer)
-    st.audio(audio, format="audio/mp3")
-
-# =========================
-# SIDEBAR
-# =========================
-st.sidebar.title("🧠 Memory")
-
-if st.sidebar.button("Бар memory"):
-    st.sidebar.write(memory)
-
-if st.sidebar.button("Last chat"):
-    st.sidebar.write(st.session_state.last_chat)
-
-if st.sidebar.button("🔥 Частые сұрақтар"):
-    sorted_freq = dict(sorted(st.session_state.freq.items(), key=lambda x: x[1], reverse=True))
-    st.sidebar.write(sorted_freq)
-
-if st.sidebar.button("Clear memory"):
-    memory = {}
-    save_memory(memory)
-    st.sidebar.success("Өшірілді")
+    speak(response)
