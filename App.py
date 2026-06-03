@@ -12,10 +12,10 @@ import base64
 # =========================
 # CONFIG
 # =========================
-st.set_page_config(page_title="Serik AI", layout="wide")
+st.set_page_config(page_title="Serik AI PRO", layout="wide")
 
 # =========================
-# SESSION STATE
+# STATE
 # =========================
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -40,14 +40,13 @@ def save_memory():
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
 # =========================
-# LANGUAGE DETECTION (FIXED)
+# LANGUAGE DETECT
 # =========================
 def detect_lang(text):
     text = text.lower()
 
-    kz_chars = "әіңғүұқөһ"
-
-    kz_score = sum(1 for c in text if c in kz_chars)
+    kz = "әіңғүұқөһ"
+    kz_score = sum(1 for c in text if c in kz)
     en_score = len(re.findall(r"[a-z]", text))
     ru_score = len(re.findall(r"[а-яё]", text))
 
@@ -66,6 +65,21 @@ def translate(text, src="auto", dest="ru"):
         return GoogleTranslator(source=src, target=dest).translate(text)
     except:
         return text
+
+# =========================
+# AUTO CORRECTION (🔥 NEW)
+# =========================
+def auto_correct(text):
+    text = text.lower().strip()
+
+    keys = list(memory.keys())
+
+    match = difflib.get_close_matches(text, keys, n=1, cutoff=0.6)
+
+    if match:
+        return match[0]
+
+    return text
 
 # =========================
 # MEMORY COMMAND
@@ -89,7 +103,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# SEARCH
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
     try:
@@ -118,6 +132,9 @@ def brain(text):
     ru_text = translate(text, "auto", "ru")
     text = ru_text.lower().strip()
 
+    # 🔥 FIX: auto correction
+    text = auto_correct(text)
+
     mem = handle_memory_command(text)
     if mem:
         return translate(mem, "ru", user_lang)
@@ -138,7 +155,7 @@ def brain(text):
     return translate(answer, "ru", user_lang)
 
 # =========================
-# VOICE (FIXED SIMPLE)
+# VOICE
 # =========================
 def speak(text):
     try:
@@ -147,12 +164,6 @@ def speak(text):
 
         if not text:
             return
-
-        lang = detect_lang(text)
-
-        # gTTS limitation → fallback
-        if lang == "kk":
-            lang = "ru"
 
         tts = gTTS(text=text[:300], lang="ru")
         file = "voice.mp3"
@@ -165,6 +176,7 @@ def speak(text):
         """
 
         st.markdown(audio_html, unsafe_allow_html=True)
+
         os.remove(file)
 
     except:
@@ -173,13 +185,13 @@ def speak(text):
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI PRO")
+st.title("🤖 Serik AI PRO MAX")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Напишите сообщение..."):
+if prompt := st.chat_input("Жазыңыз / Напишите / Write..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
