@@ -8,7 +8,7 @@ import re
 # SETTINGS
 # =========================
 MEMORY_FILE = "memory.json"
-ADMIN_PASSWORD = "nurik777"
+ADMIN_PASSWORD = "1234"
 
 # =========================
 # CLEAN TEXT
@@ -20,11 +20,12 @@ def clean(text):
     return text
 
 # =========================
-# LOAD / SAVE MEMORY
+# MEMORY LOAD/SAVE
 # =========================
 def load_memory():
     if os.path.exists(MEMORY_FILE):
-        return json.load(open(MEMORY_FILE, "r", encoding="utf-8"))
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
     return {}
 
 def save_memory(data):
@@ -39,118 +40,89 @@ memory = load_memory()
 if "chat" not in st.session_state:
     st.session_state.chat = []
 
-if "freq" not in st.session_state:
-    st.session_state.freq = {}
-
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 
 # =========================
-# LOGIN ADMIN
+# SAFE MEMORY SEARCH
 # =========================
-st.sidebar.title("🔐 Панель администратора")
+def get_answer(q):
+    q = clean(q)
 
-password = st.sidebar.text_input("Пароль", type="password")
-
-if st.sidebar.button("Войти"):
-    if password == ADMIN_PASSWORD:
-        st.session_state.is_admin = True
-        st.sidebar.success("Режим администратора включён 🔥")
-    else:
-        st.sidebar.error("Неверный пароль")
-
-# =========================
-# ОБУЧЕНИЕ (ТОЛЬКО АДМИН)
-# =========================
-if st.session_state.is_admin:
-    st.sidebar.markdown("### 🧠 Обучение бота")
-
-    q = st.sidebar.text_input("Вопрос")
-    a = st.sidebar.text_input("Ответ")
-
-    if st.sidebar.button("Сохранить"):
-        if q and a:
-            memory[clean(q)] = {
-                "answer": a,
-                "count": 0
-            }
-            save_memory(memory)
-            st.sidebar.success("Сохранено ✔")
-
-# =========================
-# AI ЛОГИКА
-# =========================
-def ai(question):
-    q = clean(question)
-
-    # точное совпадение
     if q in memory:
-        memory[q]["count"] += 1
-        save_memory(memory)
-        return memory[q]["answer"]
+        return memory[q]
 
-    # похожие вопросы
-    keys = list(memory.keys())
-    match = difflib.get_close_matches(q, keys, n=1, cutoff=0.6)
-
+    match = difflib.get_close_matches(q, list(memory.keys()), n=1, cutoff=0.6)
     if match:
-        k = match[0]
-        memory[k]["count"] += 1
-        save_memory(memory)
-        return memory[k]["answer"]
+        return memory[match[0]]
 
     return None
 
 # =========================
-# UI
+# UI (IMPORTANT FIX HERE)
 # =========================
-st.title("🤖 Ultra AI Ассистент (ChatGPT стиль)")
+st.set_page_config(page_title="AI Bot", layout="centered")
 
-user = st.text_input("Введите вопрос:")
+st.title("🤖 Simple AI Bot")
 
-if st.button("Отправить") and user:
+# =========================
+# CHAT INPUT (BOTTOM FIXED STYLE)
+# =========================
+user_input = st.text_input("Сұрақ жаз:")
 
-    st.session_state.chat.append(("Вы", user))
-    st.session_state.freq[clean(user)] = st.session_state.freq.get(clean(user), 0) + 1
+if st.button("Жіберу") and user_input:
 
-    answer = ai(user)
+    st.session_state.chat.append(("Сен", user_input))
+
+    answer = get_answer(user_input)
 
     if answer:
-        bot = f"🧠 По моей памяти:\n{answer}"
+        bot = "🧠 Memory: " + answer
     else:
-        bot = (
-            "❌ Я не знаю ответа.\n"
-            "🔐 Администратор должен обучить меня или добавить информацию."
-        )
+        bot = "❌ Мен білмеймін (admin үйрету керек)"
 
     st.session_state.chat.append(("Бот", bot))
 
 # =========================
-# CHAT DISPLAY
+# CHAT DISPLAY (NORMAL POSITION FIX)
 # =========================
+st.divider()
+
 for role, msg in st.session_state.chat:
-    if role == "Вы":
-        st.markdown(f"🧑 **Вы:** {msg}")
+    if role == "Сен":
+        st.markdown(f"🧑 **Сен:** {msg}")
     else:
         st.markdown(f"🤖 **Бот:** {msg}")
 
 # =========================
-# SIDEBAR STATS
+# SIDEBAR ADMIN
 # =========================
-st.sidebar.title("📊 Статистика")
+st.sidebar.title("🔐 Admin")
 
-if st.sidebar.button("Показать память"):
+pw = st.sidebar.text_input("Пароль", type="password")
+
+if st.sidebar.button("Login"):
+    if pw == ADMIN_PASSWORD:
+        st.session_state.is_admin = True
+        st.sidebar.success("Admin ON 🔥")
+
+if st.session_state.is_admin:
+    st.sidebar.markdown("### 🧠 Үйрету")
+
+    q = st.sidebar.text_input("Сұрақ")
+    a = st.sidebar.text_input("Жауап")
+
+    if st.sidebar.button("Сақтау"):
+        if q and a:
+            memory[clean(q)] = a
+            save_memory(memory)
+            st.sidebar.success("Сақталды ✔")
+
+# =========================
+# EXTRA
+# =========================
+if st.sidebar.button("Memory көру"):
     st.sidebar.write(memory)
 
-if st.sidebar.button("Частые вопросы"):
-    st.sidebar.write(
-        dict(sorted(st.session_state.freq.items(), key=lambda x: x[1], reverse=True))
-    )
-
-if st.sidebar.button("Очистить чат"):
+if st.sidebar.button("Чатты тазалау"):
     st.session_state.chat = []
-
-if st.sidebar.button("Сброс памяти"):
-    memory = {}
-    save_memory(memory)
-    st.sidebar.success("Очищено")
