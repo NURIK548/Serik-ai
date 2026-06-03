@@ -1,187 +1,159 @@
 import streamlit as st
 import json
-import difflib
-import wikipedia
-from gtts import gTTS
-from duckduckgo_search import DDGS
 import os
+import difflib
+import re
 
 # =========================
-# CONFIG
+# SETTINGS
 # =========================
-st.set_page_config(page_title="Serik AI", layout="wide")
-
-ADMIN_PASSWORD = "nurik777"
-
-# =========================
-# SESSION STATE
-# =========================
-if "admin" not in st.session_state:
-    st.session_state.admin = False
-
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+MEMORY_FILE = "memory.json"
+ADMIN_PASSWORD = "1234"  # өзгерт
 
 # =========================
-# MEMORY LOAD
+# CLEAN TEXT
+# =========================
+def clean(text):
+    text = text.lower()
+    text = re.sub(r"[.,;:!?\"'()\[\]{}]", "", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+# =========================
+# LOAD / SAVE MEMORY
 # =========================
 def load_memory():
-    try:
-        with open("memory_base.json", "r", encoding="utf-8") as f:
+    if os.path.exists(MEMORY_FILE):
+        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except:
-        return {}
+    return {}
+
+def save_memory(data):
+    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 memory = load_memory()
 
 # =========================
-# SAVE MEMORY
+# SESSION STATE
 # =========================
-def save_memory():
-    with open("memory_base.json", "w", encoding="utf-8") as f:
-        json.dump(memory, f, ensure_ascii=False, indent=4)
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
+
+if "chat" not in st.session_state:
+    st.session_state.chat = []
+
+if "freq" not in st.session_state:
+    st.session_state.freq = {}
 
 # =========================
-# ADMIN MEMORY SYSTEM (FIXED)
+# LOGIN
 # =========================
-def handle_memory_command(text):
+st.sidebar.title("🔐 Admin Panel")
 
-    if text.startswith("запомни "):
+password = st.sidebar.text_input("Admin password", type="password")
 
-        if not st.session_state.admin:
-            return "❌ Только админ может обучать бота"
+if st.sidebar.button("Login"):
+    if password == ADMIN_PASSWORD:
+        st.session_state.is_admin = True
+        st.sidebar.success("Admin mode ON 🔥")
+    else:
+        st.sidebar.error("Wrong password")
 
-        try:
-            text = text.replace("запомни ", "", 1)
+# =========================
+# TEACH MODE (ADMIN ONLY)
+# =========================
+if st.session_state.is_admin:
+    st.sidebar.markdown("### 🧠 Teach Bot")
 
-            # FORMAT: вопрос это ответ
-            if " это " not in text:
-                return "Формат: запомни вопрос это ответ"
+    new_q = st.sidebar.text_input("Question")
+    new_a = st.sidebar.text_input("Answer")
 
-            question, answer = text.split(" это ", 1)
+    if st.sidebar.button("Save"):
+        if new_q and new_a:
+            q = clean(new_q)
+            memory[q] = {
+                "answer": new_a,
+                "times_used": 0
+            }
+            save_memory(memory)
+            st.sidebar.success("Saved ✔")
 
-            question = question.strip().lower()
-            answer = answer.strip()
+# =========================
+# SMART SEARCH
+# =========================
+def get_answer(question):
+    q = clean(question)
 
-            memory[question] = answer
-            save_memory()
+    # exact match
+    if q in memory:
+        memory[q]["times_used"] += 1
+        save_memory(memory)
+        return memory[q]["answer"]
 
-            return "✅ Запомнил"
+    # fuzzy match
+    keys = list(memory.keys())
+    match = difflib.get_close_matches(q, keys, n=1, cutoff=0.6)
 
-        except:
-            return "❌ Ошибка"
+    if match:
+        key = match[0]
+        memory[key]["times_used"] += 1
+        save_memory(memory)
+        return memory[key]["answer"]
 
     return None
 
 # =========================
-# INTERNET SEARCH
-# =========================
-def internet_search(query):
-
-    try:
-        wikipedia.set_lang("ru")
-        return wikipedia.summary(query, sentences=2)
-    except:
-        pass
-
-    try:
-        ddgs = DDGS()
-        results = list(ddgs.text(query, max_results=3))
-
-        if results:
-            return "\n\n".join([r.get("body") or r.get("title") or "" for r in results])
-
-    except:
-        pass
-
-    return "❌ Ничего не найдено"
-
-# =========================
-# BRAIN
-# =========================
-def brain(text):
-
-    text = text.lower().strip()
-
-    # memory command
-    mem = handle_memory_command(text)
-    if mem:
-        return mem
-
-    # exact memory
-    if text in memory:
-        return memory[text]
-
-    # fuzzy memory
-    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
-    if match:
-        return memory[match[0]]
-
-    # internet fallback
-    return internet_search(text)
-
-# =========================
-# VOICE
-# =========================
-def speak(text):
-    try:
-        tts = gTTS(text=text[:300], lang="ru")
-        file = "voice.mp3"
-        tts.save(file)
-
-        with open(file, "rb") as f:
-            st.audio(f.read(), format="audio/mp3")
-
-        os.remove(file)
-    except:
-        pass
-
-# =========================
-# SIDEBAR (ADMIN)
-# =========================
-st.sidebar.title("⚙️ Menu")
-
-if not st.session_state.admin:
-    password = st.sidebar.text_input("Admin password", type="password")
-
-    if st.sidebar.button("Login"):
-        if password == ADMIN_PASSWORD:
-            st.session_state.admin = True
-            st.sidebar.success("Admin ON 🔓")
-        else:
-            st.sidebar.error("Wrong password ❌")
-else:
-    st.sidebar.success("Admin MODE 🔐")
-
-    if st.sidebar.button("Logout"):
-        st.session_state.admin = False
-
-# =========================
 # UI
 # =========================
-st.title("🤖 Serik AI PRO")
+st.title("🤖 Admin AI Bot (Serik Edition)")
 
-st.write("💬 ChatGPT-style AI бот (admin protected)")
+user_input = st.text_input("Сұрақ жаз:")
 
-# history
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+if st.button("Send") and user_input:
 
-# input
-if prompt := st.chat_input("Напишите сообщение..."):
+    q = clean(user_input)
 
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # frequency
+    st.session_state.freq[q] = st.session_state.freq.get(q, 0) + 1
 
-    with st.chat_message("user"):
-        st.markdown(prompt)
+    st.session_state.chat.append(("Сен", user_input))
 
-    with st.spinner("Думаю... 🤖"):
-        response = brain(prompt)
+    answer = get_answer(user_input)
 
-    st.session_state.messages.append({"role": "assistant", "content": response})
+    if answer:
+        bot_reply = "🧠 Memory: " + answer
+    else:
+        bot_reply = "❌ Мен білмеймін. Admin үйретуі керек."
 
-    with st.chat_message("assistant"):
-        st.markdown(response)
+    st.session_state.chat.append(("Бот", bot_reply))
 
-    speak(response)
+# =========================
+# CHAT DISPLAY
+# =========================
+for role, msg in st.session_state.chat:
+    if role == "Сен":
+        st.markdown(f"🧑 **Сен:** {msg}")
+    else:
+        st.markdown(f"🤖 **Bot:** {msg}")
+
+# =========================
+# SIDEBAR STATS
+# =========================
+st.sidebar.title("📊 Stats")
+
+if st.sidebar.button("Show memory"):
+    st.sidebar.write(memory)
+
+if st.sidebar.button("Frequent questions"):
+    st.sidebar.write(
+        dict(sorted(st.session_state.freq.items(), key=lambda x: x[1], reverse=True))
+    )
+
+if st.sidebar.button("Clear chat"):
+    st.session_state.chat = []
+
+if st.sidebar.button("Reset memory"):
+    memory = {}
+    save_memory(memory)
+    st.sidebar.success("Memory cleared")
