@@ -6,7 +6,7 @@ from gtts import gTTS
 from duckduckgo_search import DDGS
 import os
 import re
-import base64   # 👈 қосылды
+import base64
 
 # =========================
 # CONFIG
@@ -24,6 +24,16 @@ if "admin" not in st.session_state:
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
+if "learning_mode" not in st.session_state:
+    st.session_state.learning_mode = False
+
+if "last_question" not in st.session_state:
+    st.session_state.last_question = None
+
+# 🔥 LANGUAGE MODE ADDED
+if "lang_mode" not in st.session_state:
+    st.session_state.lang_mode = "AUTO"  # RU / KZ / AUTO
+
 # =========================
 # MEMORY LOAD
 # =========================
@@ -36,16 +46,10 @@ def load_memory():
 
 memory = load_memory()
 
-# =========================
-# SAVE MEMORY
-# =========================
 def save_memory():
     with open("memory_base.json", "w", encoding="utf-8") as f:
         json.dump(memory, f, ensure_ascii=False, indent=4)
 
-# =========================
-# EMOJI CLEANER
-# =========================
 def clean_text(text):
     emoji_pattern = re.compile(
         "["
@@ -61,7 +65,7 @@ def clean_text(text):
     return emoji_pattern.sub("", text)
 
 # =========================
-# ADMIN MEMORY SYSTEM
+# MEMORY SYSTEM
 # =========================
 def handle_memory_command(text):
 
@@ -92,7 +96,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET SEARCH
+# SEARCH
 # =========================
 def internet_search(query):
 
@@ -115,6 +119,26 @@ def internet_search(query):
     return "❌ Ничего не найдено"
 
 # =========================
+# LANGUAGE RESPONSE
+# =========================
+def translate_response(text):
+
+    mode = st.session_state.lang_mode
+
+    if mode == "RU":
+        return text
+
+    if mode == "KZ":
+        # өте қарапайым қазақша ауыстыру (basic)
+        text = text.replace("Привет", "Сәлем")
+        text = text.replace("Я не знаю", "Мен білмеймін")
+        text = text.replace("Запомнил", "Есімде сақталды")
+        return text
+
+    # AUTO
+    return text
+
+# =========================
 # BRAIN
 # =========================
 def brain(text):
@@ -126,31 +150,39 @@ def brain(text):
         return mem
 
     if text in memory:
-        return memory[text]
+        return translate_response(memory[text])
 
     match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
     if match:
-        return memory[match[0]]
+        return translate_response(memory[match[0]])
 
-    return internet_search(text)
+    answer = internet_search(text)
+
+    if "❌ Ничего не найдено" in answer:
+        st.session_state.learning_mode = True
+        st.session_state.last_question = text
+        return "Мен білмеймін 😕 / Я не знаю 😕 Жаз: запомни ... это ..."
+
+    return translate_response(answer)
 
 # =========================
-# VOICE (FIXED - FINAL)
+# VOICE
 # =========================
 def speak(text):
     try:
         text = clean_text(text)
-
-        # ❗ emoji + punctuation толық тазалау
         text = re.sub(r"[^\w\sа-яА-ЯёЁ]", " ", text)
-
-        # бос орындарды қысқарту
         text = re.sub(r"\s+", " ", text).strip()
 
         if not text:
             return
 
-        tts = gTTS(text=text[:300], lang="ru")
+        # 🔥 language voice
+        lang = "ru"
+        if st.session_state.lang_mode == "KZ":
+            lang = "ru"  # gTTS қазақша толық жоқ, RU fallback
+
+        tts = gTTS(text=text[:300], lang=lang)
         file = "voice.mp3"
         tts.save(file)
 
@@ -168,9 +200,16 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR (ADMIN)
+# SIDEBAR
 # =========================
 st.sidebar.title("⚙️ Menu")
+
+# language switch
+st.sidebar.subheader("🌐 Language Mode")
+st.session_state.lang_mode = st.sidebar.selectbox(
+    "Mode",
+    ["AUTO", "RU", "KZ"]
+)
 
 if not st.session_state.admin:
     password = st.sidebar.text_input("Admin password", type="password")
@@ -191,8 +230,7 @@ else:
 # UI
 # =========================
 st.title("🤖 Serik AI PRO")
-
-st.write("💬 ChatGPT-style AI бот (admin protected)")
+st.write("💬 Multi-language AI (RU / KZ / AUTO)")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
@@ -212,5 +250,9 @@ if prompt := st.chat_input("Напишите сообщение..."):
 
     with st.chat_message("assistant"):
         st.markdown(response)
+
+    if st.session_state.learning_mode and prompt.startswith("запомни "):
+        st.session_state.learning_mode = False
+        st.session_state.last_question = None
 
     speak(response)
