@@ -25,7 +25,7 @@ if "admin" not in st.session_state:
     st.session_state.admin = False
 
 # =========================
-# MEMORY
+# MEMORY LOAD
 # =========================
 def load_memory():
     try:
@@ -56,7 +56,7 @@ def handle_memory_command(text):
 
         q, a = text.split(" это ", 1)
 
-        memory[q.strip()] = a.strip()
+        memory[q.strip().lower()] = a.strip()
         save_memory()
 
         return "✅ Запомнил ✨"
@@ -64,7 +64,7 @@ def handle_memory_command(text):
     return None
 
 # =========================
-# INTERNET
+# INTERNET SEARCH
 # =========================
 def internet_search(query):
     try:
@@ -88,20 +88,20 @@ def internet_search(query):
 # =========================
 def brain(text):
 
-    ru_text = text.lower().strip()
+    text = text.lower().strip()
 
-    mem_cmd = handle_memory_command(ru_text)
+    mem_cmd = handle_memory_command(text)
     if mem_cmd:
         return mem_cmd
 
-    if ru_text in memory:
-        return memory[ru_text]
+    if text in memory:
+        return memory[text]
 
-    match = difflib.get_close_matches(ru_text, memory.keys(), n=1, cutoff=0.75)
+    match = difflib.get_close_matches(text, memory.keys(), n=1, cutoff=0.75)
     if match:
         return memory[match[0]]
 
-    answer = internet_search(ru_text)
+    answer = internet_search(text)
     if answer:
         return answer
 
@@ -135,9 +135,9 @@ def speak(text):
         pass
 
 # =========================
-# SIDEBAR
+# SIDEBAR (ADMIN)
 # =========================
-st.sidebar.title("⚙️ Admin Panel")
+st.sidebar.title("⚙️ Admin")
 
 password = st.sidebar.text_input("Password", type="password")
 
@@ -163,15 +163,14 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Напишите сюда..."):
+if prompt := st.chat_input("Жазыңыз..."):
 
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 🔥 FIXED LOADING TEXT (Russian)
-    with st.spinner("думаю... 🤖"):
+    with st.spinner("Ойлап жатырмын... 🤖"):
         response = brain(prompt)
 
     st.session_state.messages.append({"role": "assistant", "content": response})
