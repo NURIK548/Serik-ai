@@ -1,4 +1,5 @@
 streamlit
-wikipedia
-requests
 gTTS
+wikipedia
+google-generativeai
+
