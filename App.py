@@ -136,7 +136,7 @@ def brain(text):
     # self-learning mode
     st.session_state.learn_mode = True
 
-    return "🤖 Я не знаю ответ. Хочешь научить меня? Напиши: запомни ... это ..."
+    return "🤖 Я не знаю ответ."
 
 # =========================
 # VOICE
@@ -185,7 +185,7 @@ if st.session_state.admin:
 # =========================
 # UI
 # =========================
-st.title("🤖 Serik AI FULL STABLE")
+st.title("🤖 Serik AI-ТВОЙ ЛИЧНЫЙ ПОМОЩНИК")
 
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
